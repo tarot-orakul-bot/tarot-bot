@@ -109,15 +109,37 @@ def reading(message):
         reply_markup=keyboard
     )
 
+
+    
+@bot.message_handler(func=lambda message: message.text == "ℹ️ О боте")
+def about(message):
+    bot.send_message(
+        message.chat.id,
+        "🔮 Таро Оракул — бот для развлекательных раскладов Таро.\n\n"
+        "Результаты не являются профессиональной медицинской, "
+        "юридической, финансовой или иной консультацией."
+    )
 @bot.callback_query_handler(func=lambda call: call.data.startswith("reading_"))
 def reading_callback(call):
-    readings = {
-        "reading_love": (
+    if call.data == "reading_love":
+        selected = random.sample(cards, 3)
+
+        text = (
             "💕 Расклад на любовь\n\n"
-            "Прошлое — что повлияло на ситуацию.\n"
-            "Настоящее — что происходит сейчас.\n"
-            "Будущее — возможное направление развития."
-        ),
+            f"1️⃣ Прошлое — {selected[0][0]}\n"
+            f"{selected[0][1]}\n\n"
+            f"2️⃣ Настоящее — {selected[1][0]}\n"
+            f"{selected[1][1]}\n\n"
+            f"3️⃣ Возможное будущее — {selected[2][0]}\n"
+            f"{selected[2][1]}\n\n"
+            "🔮 Это символическая интерпретация для размышления, а не точное предсказание."
+        )
+
+        bot.answer_callback_query(call.id)
+        bot.send_message(call.message.chat.id, text)
+        return
+
+    readings = {
         "reading_money": (
             "💰 Расклад на деньги\n\n"
             "Текущая ситуация — что происходит с финансами.\n"
@@ -141,16 +163,6 @@ def reading_callback(call):
 
     bot.answer_callback_query(call.id)
     bot.send_message(call.message.chat.id, result)
-    
-@bot.message_handler(func=lambda message: message.text == "ℹ️ О боте")
-def about(message):
-    bot.send_message(
-        message.chat.id,
-        "🔮 Таро Оракул — бот для развлекательных раскладов Таро.\n\n"
-        "Результаты не являются профессиональной медицинской, "
-        "юридической, финансовой или иной консультацией."
-    )
-
 
 def run_bot():
     while True:
