@@ -1,6 +1,7 @@
 import os
 import random
 import threading
+import time
 from datetime import date
 
 import telebot
@@ -152,7 +153,12 @@ def about(message):
 
 
 def run_bot():
-    bot.infinity_polling(skip_pending=True)
+    while True:
+        try:
+            bot.infinity_polling(skip_pending=True)
+        except Exception as e:
+            print(f"Bot error: {e}")
+            time.sleep(5)
 
 
 if __name__ == "__main__":
