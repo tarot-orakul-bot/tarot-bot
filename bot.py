@@ -90,13 +90,57 @@ def card_of_the_day(message):
 
 @bot.message_handler(func=lambda message: message.text == "✨ Сделать расклад")
 def reading(message):
-    bot.send_message(
-        message.chat.id,
-        "✨ Раздел раскладов скоро будет доступен.\n\n"
-        "Здесь мы добавим несколько видов раскладов и оплату Telegram Stars."
+    keyboard = types.InlineKeyboardMarkup()
+
+    keyboard.add(
+        types.InlineKeyboardButton("💕 Любовь", callback_data="reading_love"),
+        types.InlineKeyboardButton("💰 Деньги", callback_data="reading_money")
     )
 
+    keyboard.add(
+        types.InlineKeyboardButton("🔮 3 карты", callback_data="reading_three"),
+        types.InlineKeyboardButton("❓ Вопрос дня", callback_data="reading_question")
+    )
 
+    bot.send_message(
+        message.chat.id,
+        "✨ Выбери тип расклада:",
+        reply_markup=keyboard
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("reading_"))
+def reading_callback(call):
+    readings = {
+        "reading_love": (
+            "💕 Расклад на любовь\n\n"
+            "Прошлое — что повлияло на ситуацию.\n"
+            "Настоящее — что происходит сейчас.\n"
+            "Будущее — возможное направление развития."
+        ),
+        "reading_money": (
+            "💰 Расклад на деньги\n\n"
+            "Текущая ситуация — что происходит с финансами.\n"
+            "Возможность — где может появиться шанс.\n"
+            "Совет — на что стоит обратить внимание."
+        ),
+        "reading_three": (
+            "🔮 Расклад «3 карты»\n\n"
+            "1️⃣ Прошлое\n"
+            "2️⃣ Настоящее\n"
+            "3️⃣ Возможное будущее"
+        ),
+        "reading_question": (
+            "❓ Расклад на вопрос дня\n\n"
+            "Сформулируй вопрос про себя и ситуацию, "
+            "а карты дадут символическую интерпретацию."
+        ),
+    }
+
+    result = readings.get(call.data, "Расклад не найден.")
+
+    bot.answer_callback_query(call.id)
+    bot.send_message(call.message.chat.id, result)
+    
 @bot.message_handler(func=lambda message: message.text == "ℹ️ О боте")
 def about(message):
     bot.send_message(
