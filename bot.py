@@ -1,6 +1,7 @@
 import os
 import random
 import threading
+from datetime import date
 
 import telebot
 from flask import Flask
@@ -15,6 +16,8 @@ if not TOKEN:
 bot = telebot.TeleBot(TOKEN)
 
 app = Flask(__name__)
+last_card_date = {}
+
 
 
 @app.route("/")
@@ -59,6 +62,19 @@ def start(message):
 
 @bot.message_handler(func=lambda message: message.text == "🔮 Карта дня")
 def card_of_the_day(message):
+    user_id = message.from_user.id
+    today = date.today()
+
+    if last_card_date.get(user_id) == today:
+        bot.send_message(
+            message.chat.id,
+            "🔮 Ты уже получил карту дня сегодня.\n\n"
+            "Возвращайся завтра за новой картой ✨"
+        )
+        return
+
+    last_card_date[user_id] = today
+
     card, meaning = random.choice(cards)
 
     text = (
