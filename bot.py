@@ -1,7 +1,11 @@
 import os
 import random
+import threading
+
 import telebot
+from flask import Flask
 from telebot import types
+
 
 TOKEN = os.getenv("BOT_TOKEN")
 
@@ -9,6 +13,14 @@ if not TOKEN:
     raise ValueError("BOT_TOKEN не найден")
 
 bot = telebot.TeleBot(TOKEN)
+
+app = Flask(__name__)
+
+
+@app.route("/")
+def home():
+    return "Tarot Orakul Bot is running", 200
+
 
 cards = [
     ("☀️ Солнце", "Сегодня день ясности, энергии и хороших возможностей."),
@@ -21,6 +33,7 @@ cards = [
     ("🦁 Сила", "Спокойствие и уверенность помогут справиться с трудностями."),
     ("🌍 Мир", "Что-то подходит к завершению и освобождает место для нового."),
 ]
+
 
 def main_keyboard():
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -78,4 +91,12 @@ def about(message):
     )
 
 
-bot.infinity_polling(skip_pending=True)
+def run_bot():
+    bot.infinity_polling(skip_pending=True)
+
+
+if __name__ == "__main__":
+    threading.Thread(target=run_bot, daemon=True).start()
+
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
