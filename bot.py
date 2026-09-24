@@ -23,6 +23,11 @@ OWNER_ID = int(os.getenv("BOT_OWNER_ID", "0"))
 PRICE = 15
 TZ = ZoneInfo("Asia/Yekaterinburg")
 
+# Промокод для друзей.
+# Он не показывается в обычном меню бота.
+PROMO_CODE = "FRIEND"
+PROMO_CREDITS = 3
+
 WEBHOOK_BASE_URL = os.getenv("RENDER_EXTERNAL_URL")
 WEBHOOK_PATH = "/telegram-webhook"
 
@@ -341,6 +346,19 @@ def init_db():
             )
         """)
 
+        # Эти две команды безопасно добавят поля промокода
+        # в уже существующую базу.
+        conn.execute("""
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS promo_code TEXT
+        """)
+
+        conn.execute("""
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS promo_credits
+            INTEGER NOT NULL DEFAULT 0
+        """)
+
         conn.execute("""
             CREATE TABLE IF NOT EXISTS payments (
                 charge_id TEXT PRIMARY KEY,
@@ -409,6 +427,75 @@ def claim_free(user_id, field):
             )).fetchone()
 
         return row is not None
+
+
+# =========================================================
+# ПРОМОКОД
+# =========================================================
+
+def activate_promo(user_id, code):
+    normalized_code = code.strip().upper()
+
+    if normalized_code != PROMO_CODE:
+        return "invalid", 0
+
+    with db() as conn:
+
+        row = conn.execute("""
+            INSERT INTO users (
+                user_id,
+                promo_code,
+                promo_credits
+            )
+            VALUES (%s, %s, %s)
+
+            ON CONFLICT (user_id)
+            DO UPDATE SET
+                promo_code = EXCLUDED.promo_code,
+                promo_credits = EXCLUDED.promo_credits
+            WHERE users.promo_code IS NULL
+
+            RETURNING promo_credits
+        """, (
+            user_id,
+            PROMO_CODE,
+            PROMO_CREDITS,
+        )).fetchone()
+
+        if row:
+            return "activated", row[0]
+
+        current = conn.execute("""
+            SELECT promo_credits
+            FROM users
+            WHERE user_id = %s
+        """, (
+            user_id,
+        )).fetchone()
+
+        return (
+            "already",
+            current[0] if current else 0,
+        )
+
+
+def claim_promo_credit(user_id):
+    with db() as conn:
+
+        row = conn.execute("""
+            UPDATE users
+            SET promo_credits = promo_credits - 1
+            WHERE user_id = %s
+              AND promo_credits > 0
+            RETURNING promo_credits
+        """, (
+            user_id,
+        )).fetchone()
+
+        if not row:
+            return None
+
+        return row[0]
 
 
 # =========================================================
@@ -635,6 +722,104 @@ def myid(message):
     bot.send_message(
         message.chat.id,
         f"Твой Telegram ID: {message.from_user.id}",
+    )
+
+
+# =========================================================
+# АКТИВАЦИЯ ПРОМОКОДА
+# =========================================================
+
+@bot.message_handler(commands=["promo"])
+def promo(message):
+
+    parts = message.text.split(
+        maxsplit=1
+    )
+
+    if len(parts) < 2:
+        bot.send_message(
+            message.chat.id,
+            "🎁 Чтобы активировать промокод, введи:\n\n"
+            "/promo КОД",
+        )
+        return
+
+    status, credits = activate_promo(
+        message.from_user.id,
+        parts[1],
+    )
+
+    if status == "invalid":
+        bot.send_message(
+            message.chat.id,
+            "❌ Такой промокод не найден.",
+        )
+        return
+
+    if status == "already":
+        bot.send_message(
+            message.chat.id,
+            "🎁 Промокод на этом аккаунте "
+            "уже был активирован.\n\n"
+            f"Осталось бесплатных раскладов: {credits}.",
+        )
+        return
+
+    bot.send_message(
+        message.chat.id,
+        "🎉 Промокод активирован!\n\n"
+        f"Тебе доступно {credits} бесплатных расклада.\n\n"
+        "Их можно использовать на:\n"
+        "💕 Любовь\n"
+        "💰 Деньги\n"
+        "🔮 3 карты\n\n"
+        "Выбирай расклад через обычное меню 👇",
+        reply_markup=main_keyboard(),
+    )
+
+
+# =========================================================
+# СКРЫТЫЙ ТЕСТ РАСКЛАДОВ ДЛЯ ВЛАДЕЛЬЦА
+# =========================================================
+
+@bot.message_handler(commands=["testreading"])
+def testreading(message):
+
+    # Для остальных пользователей команда ничего не делает.
+    if (
+        not OWNER_ID
+        or message.from_user.id != OWNER_ID
+    ):
+        return
+
+    parts = message.text.split(
+        maxsplit=1
+    )
+
+    if (
+        len(parts) < 2
+        or parts[1].strip().lower() not in SPREADS
+    ):
+        bot.send_message(
+            message.chat.id,
+            "🧪 Тестовые расклады:\n\n"
+            "/testreading love\n"
+            "/testreading money\n"
+            "/testreading three",
+        )
+        return
+
+    kind = parts[1].strip().lower()
+
+    bot.send_message(
+        message.chat.id,
+        "🧪 Тестовый режим владельца.\n"
+        "Stars не списываются.",
+    )
+
+    bot.send_message(
+        message.chat.id,
+        spread(kind),
     )
 
 
@@ -945,6 +1130,9 @@ def reading_callback(call):
         )
         return
 
+    # Сначала сохраняем старую логику:
+    # первый расклад "3 карты" бесплатный.
+    # Промокод при этом НЕ расходуется.
     if kind == "three":
 
         if claim_free(
@@ -966,6 +1154,31 @@ def reading_callback(call):
 
             return
 
+    # Если обычный бесплатный расклад уже использован,
+    # проверяем бонусы промокода.
+    remaining = claim_promo_credit(
+        call.from_user.id
+    )
+
+    if remaining is not None:
+        answer(call)
+
+        bot.send_message(
+            call.message.chat.id,
+            "🎁 Использован бесплатный расклад "
+            "по промокоду.\n\n"
+            f"Осталось бесплатных раскладов: {remaining}.",
+        )
+
+        bot.send_message(
+            call.message.chat.id,
+            spread(kind),
+        )
+
+        return
+
+    # Если бесплатных вариантов больше нет,
+    # запускается обычная оплата Stars.
     answer(call)
 
     offer_payment(
