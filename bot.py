@@ -2,7 +2,7 @@ import hashlib
 import hmac
 import os
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -23,8 +23,6 @@ OWNER_ID = int(os.getenv("BOT_OWNER_ID", "0"))
 PRICE = 15
 TZ = ZoneInfo("Asia/Yekaterinburg")
 
-# Промокод для друзей.
-# Он не показывается в обычном меню бота.
 PROMO_CODE = "FRIEND"
 PROMO_CREDITS = 3
 
@@ -32,12 +30,16 @@ WEBHOOK_BASE_URL = os.getenv("RENDER_EXTERNAL_URL")
 WEBHOOK_PATH = "/telegram-webhook"
 
 if not TOKEN or not DATABASE_URL:
-    raise RuntimeError("Нужны переменные BOT_TOKEN и DATABASE_URL в Render")
+    raise RuntimeError(
+        "Нужны переменные BOT_TOKEN и DATABASE_URL в Render"
+    )
 
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
-WEBHOOK_SECRET = hashlib.sha256(TOKEN.encode()).hexdigest()
+WEBHOOK_SECRET = hashlib.sha256(
+    TOKEN.encode()
+).hexdigest()
 
 
 # =========================================================
@@ -310,13 +312,19 @@ def telegram_webhook():
         "",
     )
 
-    if not hmac.compare_digest(received_secret, WEBHOOK_SECRET):
+    if not hmac.compare_digest(
+        received_secret,
+        WEBHOOK_SECRET,
+    ):
         abort(403)
 
     if not request.is_json:
         abort(415)
 
-    update = types.Update.de_json(request.get_data(as_text=True))
+    update = types.Update.de_json(
+        request.get_data(as_text=True)
+    )
+
     bot.process_new_updates([update])
 
     return "", 200
@@ -357,6 +365,40 @@ def init_db():
             INTEGER NOT NULL DEFAULT 0
         """)
 
+        # Когда пользователь впервые появился в базе.
+        conn.execute("""
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS created_at
+            TIMESTAMPTZ
+        """)
+
+        # Последняя активность пользователя.
+        conn.execute("""
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS last_seen
+            TIMESTAMPTZ
+        """)
+
+        # Для уже существующих пользователей.
+        conn.execute("""
+            UPDATE users
+            SET created_at = COALESCE(
+                created_at,
+                now()
+            )
+            WHERE created_at IS NULL
+        """)
+
+        conn.execute("""
+            UPDATE users
+            SET last_seen = COALESCE(
+                last_seen,
+                created_at,
+                now()
+            )
+            WHERE last_seen IS NULL
+        """)
+
         conn.execute("""
             CREATE TABLE IF NOT EXISTS payments (
                 charge_id TEXT PRIMARY KEY,
@@ -377,6 +419,37 @@ def init_db():
         """)
 
 
+# =========================================================
+# УЧЁТ ПОЛЬЗОВАТЕЛЕЙ
+# =========================================================
+
+def touch_user(user_id):
+    """
+    Создаёт пользователя при первом обращении.
+    При следующих обращениях обновляет last_seen.
+    """
+
+    with db() as conn:
+        conn.execute("""
+            INSERT INTO users (
+                user_id,
+                created_at,
+                last_seen
+            )
+            VALUES (
+                %s,
+                now(),
+                now()
+            )
+
+            ON CONFLICT (user_id)
+            DO UPDATE SET
+                last_seen = now()
+        """, (
+            user_id,
+        ))
+
+
 def claim_free(user_id, field):
     with db() as conn:
 
@@ -384,35 +457,57 @@ def claim_free(user_id, field):
             row = conn.execute("""
                 INSERT INTO users (
                     user_id,
-                    three_used
+                    three_used,
+                    created_at,
+                    last_seen
                 )
-                VALUES (%s, TRUE)
+                VALUES (
+                    %s,
+                    TRUE,
+                    now(),
+                    now()
+                )
 
                 ON CONFLICT (user_id)
-                DO UPDATE SET three_used = TRUE
+                DO UPDATE SET
+                    three_used = TRUE,
+                    last_seen = now()
                 WHERE users.three_used = FALSE
 
                 RETURNING user_id
-            """, (user_id,)).fetchone()
+            """, (
+                user_id,
+            )).fetchone()
 
         else:
             if field not in (
                 "daily_card",
                 "daily_question",
             ):
-                raise ValueError("Неизвестная бесплатная функция")
+                raise ValueError(
+                    "Неизвестная бесплатная функция"
+                )
 
             today = datetime.now(TZ).date()
 
             row = conn.execute(f"""
                 INSERT INTO users (
                     user_id,
-                    {field}
+                    {field},
+                    created_at,
+                    last_seen
                 )
-                VALUES (%s, %s)
+                VALUES (
+                    %s,
+                    %s,
+                    now(),
+                    now()
+                )
 
                 ON CONFLICT (user_id)
-                DO UPDATE SET {field} = EXCLUDED.{field}
+                DO UPDATE SET
+                    {field} = EXCLUDED.{field},
+                    last_seen = now()
                 WHERE users.{field}
                     IS DISTINCT FROM EXCLUDED.{field}
 
@@ -440,14 +535,23 @@ def activate_promo(user_id, code):
             INSERT INTO users (
                 user_id,
                 promo_code,
-                promo_credits
+                promo_credits,
+                created_at,
+                last_seen
             )
-            VALUES (%s, %s, %s)
+            VALUES (
+                %s,
+                %s,
+                %s,
+                now(),
+                now()
+            )
 
             ON CONFLICT (user_id)
             DO UPDATE SET
                 promo_code = EXCLUDED.promo_code,
-                promo_credits = EXCLUDED.promo_credits
+                promo_credits = EXCLUDED.promo_credits,
+                last_seen = now()
             WHERE users.promo_code IS NULL
 
             RETURNING promo_credits
@@ -461,9 +565,10 @@ def activate_promo(user_id, code):
             return "activated", row[0]
 
         current = conn.execute("""
-            SELECT promo_credits
-            FROM users
+            UPDATE users
+            SET last_seen = now()
             WHERE user_id = %s
+            RETURNING promo_credits
         """, (
             user_id,
         )).fetchone()
@@ -478,7 +583,9 @@ def claim_promo_credit(user_id):
     with db() as conn:
         row = conn.execute("""
             UPDATE users
-            SET promo_credits = promo_credits - 1
+            SET
+                promo_credits = promo_credits - 1,
+                last_seen = now()
             WHERE user_id = %s
               AND promo_credits > 0
             RETURNING promo_credits
@@ -560,7 +667,8 @@ def spread(kind):
         title,
         "━━━━━━━━━━━━━━",
         "Перед тобой три карты. "
-        "Посмотри на каждую отдельно, а затем на их общую историю.",
+        "Посмотри на каждую отдельно, "
+        "а затем на их общую историю.",
     ]
 
     for number, position, card in zip(
@@ -577,7 +685,10 @@ def spread(kind):
             f"{meaning}"
         )
 
-    names = [card[0] for card in chosen]
+    names = [
+        card[0]
+        for card in chosen
+    ]
 
     if kind == "love":
         connection = (
@@ -693,6 +804,9 @@ def answer(call, text=None):
 
 @bot.message_handler(commands=["start"])
 def start(message):
+    # Теперь даже простой /start сразу учитывает пользователя.
+    touch_user(message.from_user.id)
+
     bot.send_message(
         message.chat.id,
         "🔮 Добро пожаловать в Таро Оракул!\n\n"
@@ -710,6 +824,8 @@ def start(message):
 
 @bot.message_handler(commands=["myid"])
 def myid(message):
+    touch_user(message.from_user.id)
+
     bot.send_message(
         message.chat.id,
         f"Твой Telegram ID: {message.from_user.id}",
@@ -722,9 +838,13 @@ def myid(message):
 
 @bot.message_handler(commands=["promo"])
 def promo(message):
-    parts = message.text.split(maxsplit=1)
+    parts = message.text.split(
+        maxsplit=1
+    )
 
     if len(parts) < 2:
+        touch_user(message.from_user.id)
+
         bot.send_message(
             message.chat.id,
             "🎁 Чтобы активировать промокод, введи:\n\n"
@@ -738,6 +858,8 @@ def promo(message):
     )
 
     if status == "invalid":
+        touch_user(message.from_user.id)
+
         bot.send_message(
             message.chat.id,
             "❌ Такой промокод не найден.",
@@ -778,7 +900,11 @@ def testreading(message):
     ):
         return
 
-    parts = message.text.split(maxsplit=1)
+    touch_user(message.from_user.id)
+
+    parts = message.text.split(
+        maxsplit=1
+    )
 
     if (
         len(parts) < 2
@@ -819,71 +945,133 @@ def stats(message):
     ):
         return
 
-    today = datetime.now(TZ).date()
+    # /stats тоже считается активностью владельца.
+    touch_user(message.from_user.id)
+
+    now_local = datetime.now(TZ)
+
+    today_start = now_local.replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+
+    tomorrow_start = (
+        today_start
+        + timedelta(days=1)
+    )
+
+    today = now_local.date()
 
     try:
         with db() as conn:
-            total_users = conn.execute(
-                "SELECT COUNT(*) FROM users"
-            ).fetchone()[0]
 
-            card_today = conn.execute(
-                "SELECT COUNT(*) FROM users "
-                "WHERE daily_card = %s",
-                (today,),
-            ).fetchone()[0]
+            total_users = conn.execute("""
+                SELECT COUNT(*)
+                FROM users
+            """).fetchone()[0]
 
-            question_today = conn.execute(
-                "SELECT COUNT(*) FROM users "
-                "WHERE daily_question = %s",
-                (today,),
-            ).fetchone()[0]
+            new_today = conn.execute("""
+                SELECT COUNT(*)
+                FROM users
+                WHERE created_at >= %s
+                  AND created_at < %s
+            """, (
+                today_start,
+                tomorrow_start,
+            )).fetchone()[0]
 
-            free_three = conn.execute(
-                "SELECT COUNT(*) FROM users "
-                "WHERE three_used = TRUE"
-            ).fetchone()[0]
+            active_today = conn.execute("""
+                SELECT COUNT(*)
+                FROM users
+                WHERE last_seen >= %s
+                  AND last_seen < %s
+            """, (
+                today_start,
+                tomorrow_start,
+            )).fetchone()[0]
 
-            promo_users = conn.execute(
-                "SELECT COUNT(*) FROM users "
-                "WHERE promo_code IS NOT NULL"
-            ).fetchone()[0]
+            card_today = conn.execute("""
+                SELECT COUNT(*)
+                FROM users
+                WHERE daily_card = %s
+            """, (
+                today,
+            )).fetchone()[0]
 
-            promo_credits_left = conn.execute(
-                "SELECT COALESCE(SUM(promo_credits), 0) "
-                "FROM users"
-            ).fetchone()[0]
+            question_today = conn.execute("""
+                SELECT COUNT(*)
+                FROM users
+                WHERE daily_question = %s
+            """, (
+                today,
+            )).fetchone()[0]
 
-            successful_payments = conn.execute(
-                "SELECT COUNT(*) FROM payments"
-            ).fetchone()[0]
+            free_three = conn.execute("""
+                SELECT COUNT(*)
+                FROM users
+                WHERE three_used = TRUE
+            """).fetchone()[0]
 
-            delivered_payments = conn.execute(
-                "SELECT COUNT(*) FROM payments "
-                "WHERE delivered = TRUE"
-            ).fetchone()[0]
+            promo_users = conn.execute("""
+                SELECT COUNT(*)
+                FROM users
+                WHERE promo_code IS NOT NULL
+            """).fetchone()[0]
 
-            support_count = conn.execute(
-                "SELECT COUNT(*) FROM support_tickets"
-            ).fetchone()[0]
+            promo_credits_left = conn.execute("""
+                SELECT COALESCE(
+                    SUM(promo_credits),
+                    0
+                )
+                FROM users
+            """).fetchone()[0]
 
-        stars_received = successful_payments * PRICE
+            successful_payments = conn.execute("""
+                SELECT COUNT(*)
+                FROM payments
+            """).fetchone()[0]
+
+            delivered_payments = conn.execute("""
+                SELECT COUNT(*)
+                FROM payments
+                WHERE delivered = TRUE
+            """).fetchone()[0]
+
+            support_count = conn.execute("""
+                SELECT COUNT(*)
+                FROM support_tickets
+            """).fetchone()[0]
+
+        stars_received = (
+            successful_payments
+            * PRICE
+        )
 
         bot.send_message(
             message.chat.id,
             "📊 Статистика Таро Оракул\n\n"
-            f"👥 Пользователей в базе: {total_users}\n\n"
-            "📅 Сегодня:\n"
-            f"🔮 Получили карту дня: {card_today}\n"
-            f"❓ Получили вопрос дня: {question_today}\n\n"
+
+            "👥 Пользователи:\n"
+            f"Всего: {total_users}\n"
+            f"🆕 Новых сегодня: {new_today}\n"
+            f"🟢 Активных сегодня: {active_today}\n\n"
+
+            "📅 Использование сегодня:\n"
+            f"🔮 Карта дня: {card_today}\n"
+            f"❓ Вопрос дня: {question_today}\n\n"
+
             "🎁 Бесплатные функции:\n"
-            f"🔮 Использовали первый расклад «3 карты»: {free_three}\n"
+            f"🔮 Первый расклад «3 карты»: {free_three}\n"
             f"🎟 Активировали промокод: {promo_users}\n"
             f"🎁 Осталось промо-раскладов: {promo_credits_left}\n\n"
+
             "💳 Оплата:\n"
             f"✅ Успешных платежей: {successful_payments}\n"
             f"📨 Выдано платных раскладов: {delivered_payments}\n"
             f"⭐ Получено Stars: {stars_received}\n\n"
+
             "🛟 Поддержка:\n"
             f"📩 Всего обращений: {support_count}"
         )
@@ -892,12 +1080,15 @@ def stats(message):
         bot.send_message(
             message.chat.id,
             "❌ Не удалось получить статистику."
-        )# =========================================================
+        )
+# =========================================================
 # УСЛОВИЯ
 # =========================================================
 
 @bot.message_handler(commands=["terms"])
 def terms(message):
+    touch_user(message.from_user.id)
+
     bot.send_message(
         message.chat.id,
         "📖 Условия Таро Оракул\n\n"
@@ -925,16 +1116,27 @@ def terms(message):
     commands=["support", "paysupport"]
 )
 def support(message):
+    touch_user(message.from_user.id)
+
     with db() as conn:
         conn.execute("""
             INSERT INTO users (
                 user_id,
-                support_pending
+                support_pending,
+                created_at,
+                last_seen
             )
-            VALUES (%s, TRUE)
+            VALUES (
+                %s,
+                TRUE,
+                now(),
+                now()
+            )
 
             ON CONFLICT (user_id)
-            DO UPDATE SET support_pending = TRUE
+            DO UPDATE SET
+                support_pending = TRUE,
+                last_seen = now()
         """, (
             message.from_user.id,
         ))
@@ -948,8 +1150,13 @@ def support(message):
 
 @bot.message_handler(commands=["reply"])
 def reply_to_ticket(message):
-    if message.from_user.id != OWNER_ID:
+    if (
+        not OWNER_ID
+        or message.from_user.id != OWNER_ID
+    ):
         return
+
+    touch_user(message.from_user.id)
 
     parts = message.text.split(
         maxsplit=2
@@ -1002,6 +1209,7 @@ def reply_to_ticket(message):
     func=lambda m: m.text == "🔮 Карта дня"
 )
 def card_of_the_day(message):
+    touch_user(message.from_user.id)
 
     if not claim_free(
         message.from_user.id,
@@ -1028,6 +1236,7 @@ def card_of_the_day(message):
     func=lambda m: m.text == "❓ Вопрос дня"
 )
 def question_of_the_day(message):
+    touch_user(message.from_user.id)
 
     if not claim_free(
         message.from_user.id,
@@ -1054,6 +1263,7 @@ def question_of_the_day(message):
     func=lambda m: m.text == "✨ Сделать расклад"
 )
 def reading(message):
+    touch_user(message.from_user.id)
 
     bot.send_message(
         message.chat.id,
@@ -1073,6 +1283,7 @@ def reading(message):
     func=lambda m: m.text == "ℹ️ О боте"
 )
 def about(message):
+    touch_user(message.from_user.id)
 
     bot.send_message(
         message.chat.id,
@@ -1126,6 +1337,8 @@ def offer_payment(
     user_id,
     kind,
 ):
+    touch_user(user_id)
+
     if not OWNER_ID:
         bot.send_message(
             chat_id,
@@ -1142,7 +1355,6 @@ def offer_payment(
         ).fetchone()
 
     if not row or not row[0]:
-
         keyboard = types.InlineKeyboardMarkup()
 
         keyboard.add(
@@ -1187,6 +1399,7 @@ def offer_payment(
     and c.data.startswith("reading_")
 )
 def reading_callback(call):
+    touch_user(call.from_user.id)
 
     kind = call.data.removeprefix(
         "reading_"
@@ -1202,7 +1415,6 @@ def reading_callback(call):
     # Первый расклад "3 карты" бесплатный.
     # Промокод при этом не расходуется.
     if kind == "three":
-
         if claim_free(
             call.from_user.id,
             "three_used",
@@ -1263,6 +1475,7 @@ def reading_callback(call):
     c.data == "show_terms"
 )
 def show_terms(call):
+    touch_user(call.from_user.id)
 
     answer(call)
 
@@ -1284,6 +1497,7 @@ def show_terms(call):
     and c.data.startswith("agree_")
 )
 def agree(call):
+    touch_user(call.from_user.id)
 
     kind = call.data.removeprefix(
         "agree_"
@@ -1300,12 +1514,21 @@ def agree(call):
         conn.execute("""
             INSERT INTO users (
                 user_id,
-                terms_accepted
+                terms_accepted,
+                created_at,
+                last_seen
             )
-            VALUES (%s, TRUE)
+            VALUES (
+                %s,
+                TRUE,
+                now(),
+                now()
+            )
 
             ON CONFLICT (user_id)
-            DO UPDATE SET terms_accepted = TRUE
+            DO UPDATE SET
+                terms_accepted = TRUE,
+                last_seen = now()
         """, (
             call.from_user.id,
         ))
@@ -1347,8 +1570,9 @@ def invoice_details(
     func=lambda query: True
 )
 def pre_checkout(query):
-
     try:
+        touch_user(query.from_user.id)
+
         kind = invoice_details(
             query.invoice_payload,
             query.from_user.id,
@@ -1384,7 +1608,6 @@ def pre_checkout(query):
         )
 
     except Exception:
-
         bot.answer_pre_checkout_query(
             query.id,
             ok=False,
@@ -1405,6 +1628,7 @@ def pre_checkout(query):
     ]
 )
 def payment_success(message):
+    touch_user(message.from_user.id)
 
     payment = message.successful_payment
 
@@ -1431,7 +1655,6 @@ def payment_success(message):
     )
 
     with db() as conn:
-
         conn.execute("""
             INSERT INTO payments (
                 charge_id,
@@ -1502,9 +1725,10 @@ def payment_success(message):
     func=lambda m: True,
 )
 def other_text(message):
+    # Любое обычное текстовое сообщение тоже считается активностью.
+    touch_user(message.from_user.id)
 
     with db() as conn:
-
         row = conn.execute(
             "SELECT support_pending "
             "FROM users "
@@ -1515,7 +1739,6 @@ def other_text(message):
         ).fetchone()
 
         if not row or not row[0]:
-
             bot.send_message(
                 message.chat.id,
                 "Я не понял сообщение 🙂\n\n"
@@ -1540,7 +1763,9 @@ def other_text(message):
 
         conn.execute(
             "UPDATE users "
-            "SET support_pending = FALSE "
+            "SET "
+            "support_pending = FALSE, "
+            "last_seen = now() "
             "WHERE user_id = %s",
             (
                 message.from_user.id,
@@ -1555,7 +1780,6 @@ def other_text(message):
     )
 
     if OWNER_ID:
-
         try:
             bot.send_message(
                 OWNER_ID,
@@ -1576,7 +1800,6 @@ def other_text(message):
 # =========================================================
 
 if __name__ == "__main__":
-
     init_db()
 
     if not WEBHOOK_BASE_URL:
@@ -1609,3 +1832,4 @@ if __name__ == "__main__":
             )
         ),
     )
+
