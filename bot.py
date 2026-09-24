@@ -15,10 +15,8 @@ if not TOKEN:
     raise ValueError("BOT_TOKEN не найден")
 
 bot = telebot.TeleBot(TOKEN)
-
 app = Flask(__name__)
 last_card_date = {}
-
 
 
 @app.route("/")
@@ -53,12 +51,7 @@ def start(message):
         "Здесь ты можешь получить карту дня и сделать расклад Таро.\n\n"
         "✨ Нажми кнопку ниже, чтобы начать."
     )
-
-    bot.send_message(
-        message.chat.id,
-        text,
-        reply_markup=main_keyboard()
-    )
+    bot.send_message(message.chat.id, text, reply_markup=main_keyboard())
 
 
 @bot.message_handler(func=lambda message: message.text == "🔮 Карта дня")
@@ -75,34 +68,29 @@ def card_of_the_day(message):
         return
 
     last_card_date[user_id] = today
-
     card, meaning = random.choice(cards)
 
     text = (
-        f"🔮 Твоя карта дня:\n\n"
+        "🔮 Твоя карта дня:\n\n"
         f"{card}\n\n"
         f"{meaning}\n\n"
         "Помни: Таро — развлекательная и рефлексивная практика, "
         "а не точное предсказание будущего."
     )
-
     bot.send_message(message.chat.id, text)
 
 
 @bot.message_handler(func=lambda message: message.text == "✨ Сделать расклад")
 def reading(message):
     keyboard = types.InlineKeyboardMarkup()
-
     keyboard.add(
         types.InlineKeyboardButton("💕 Любовь", callback_data="reading_love"),
         types.InlineKeyboardButton("💰 Деньги", callback_data="reading_money")
     )
-
     keyboard.add(
         types.InlineKeyboardButton("🔮 3 карты", callback_data="reading_three"),
         types.InlineKeyboardButton("❓ Вопрос дня", callback_data="reading_question")
     )
-
     bot.send_message(
         message.chat.id,
         "✨ Выбери тип расклада:",
@@ -110,7 +98,6 @@ def reading(message):
     )
 
 
-    
 @bot.message_handler(func=lambda message: message.text == "ℹ️ О боте")
 def about(message):
     bot.send_message(
@@ -119,11 +106,12 @@ def about(message):
         "Результаты не являются профессиональной медицинской, "
         "юридической, финансовой или иной консультацией."
     )
+
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith("reading_"))
 def reading_callback(call):
     if call.data == "reading_love":
         selected = random.sample(cards, 3)
-
         text = (
             "💕 Расклад на любовь\n\n"
             f"1️⃣ Прошлое — {selected[0][0]}\n"
@@ -132,20 +120,30 @@ def reading_callback(call):
             f"{selected[1][1]}\n\n"
             f"3️⃣ Возможное будущее — {selected[2][0]}\n"
             f"{selected[2][1]}\n\n"
-            "🔮 Это символическая интерпретация для размышления, а не точное предсказание."
+            "🔮 Это символическая интерпретация для размышления, "
+            "а не точное предсказание."
         )
+        bot.answer_callback_query(call.id)
+        bot.send_message(call.message.chat.id, text)
+        return
 
+    if call.data == "reading_money":
+        selected = random.sample(cards, 3)
+        text = (
+            "💰 Расклад на деньги\n\n"
+            f"1️⃣ Текущая ситуация — {selected[0][0]}\n"
+            f"{selected[0][1]}\n\n"
+            f"2️⃣ Возможность — {selected[1][0]}\n"
+            f"{selected[1][1]}\n\n"
+            f"3️⃣ Совет — {selected[2][0]}\n"
+            f"{selected[2][1]}\n\n"
+            "🔮 Это символическая интерпретация, а не финансовый совет."
+        )
         bot.answer_callback_query(call.id)
         bot.send_message(call.message.chat.id, text)
         return
 
     readings = {
-        "reading_money": (
-            "💰 Расклад на деньги\n\n"
-            "Текущая ситуация — что происходит с финансами.\n"
-            "Возможность — где может появиться шанс.\n"
-            "Совет — на что стоит обратить внимание."
-        ),
         "reading_three": (
             "🔮 Расклад «3 карты»\n\n"
             "1️⃣ Прошлое\n"
@@ -160,9 +158,9 @@ def reading_callback(call):
     }
 
     result = readings.get(call.data, "Расклад не найден.")
-
     bot.answer_callback_query(call.id)
     bot.send_message(call.message.chat.id, result)
+
 
 def run_bot():
     while True:
@@ -175,6 +173,5 @@ def run_bot():
 
 if __name__ == "__main__":
     threading.Thread(target=run_bot, daemon=True).start()
-
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
