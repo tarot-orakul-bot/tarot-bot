@@ -16,13 +16,8 @@ if not TOKEN:
 
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
+
 last_card_date = {}
-
-
-@app.route("/")
-def home():
-    return "Tarot Orakul Bot is running", 200
-
 
 cards = [
     ("☀️ Солнце", "Сегодня день ясности, энергии и хороших возможностей."),
@@ -35,6 +30,11 @@ cards = [
     ("🦁 Сила", "Спокойствие и уверенность помогут справиться с трудностями."),
     ("🌍 Мир", "Что-то подходит к завершению и освобождает место для нового."),
 ]
+
+
+@app.route("/")
+def home():
+    return "Tarot Orakul Bot is running", 200
 
 
 def main_keyboard():
@@ -67,8 +67,8 @@ def card_of_the_day(message):
         )
         return
 
-    last_card_date[user_id] = today
     card, meaning = random.choice(cards)
+    last_card_date[user_id] = today
 
     text = (
         "🔮 Твоя карта дня:\n\n"
@@ -110,6 +110,8 @@ def about(message):
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("reading_"))
 def reading_callback(call):
+    bot.answer_callback_query(call.id)
+
     if call.data == "reading_love":
         selected = random.sample(cards, 3)
         text = (
@@ -123,11 +125,8 @@ def reading_callback(call):
             "🔮 Это символическая интерпретация для размышления, "
             "а не точное предсказание."
         )
-        bot.answer_callback_query(call.id)
-        bot.send_message(call.message.chat.id, text)
-        return
 
-    if call.data == "reading_money":
+    elif call.data == "reading_money":
         selected = random.sample(cards, 3)
         text = (
             "💰 Расклад на деньги\n\n"
@@ -139,27 +138,35 @@ def reading_callback(call):
             f"{selected[2][1]}\n\n"
             "🔮 Это символическая интерпретация, а не финансовый совет."
         )
-        bot.answer_callback_query(call.id)
-        bot.send_message(call.message.chat.id, text)
-        return
 
-    readings = {
-        "reading_three": (
+    elif call.data == "reading_three":
+        selected = random.sample(cards, 3)
+        text = (
             "🔮 Расклад «3 карты»\n\n"
-            "1️⃣ Прошлое\n"
-            "2️⃣ Настоящее\n"
-            "3️⃣ Возможное будущее"
-        ),
-        "reading_question": (
-            "❓ Расклад на вопрос дня\n\n"
-            "Сформулируй вопрос про себя и ситуацию, "
-            "а карты дадут символическую интерпретацию."
-        ),
-    }
+            f"1️⃣ Прошлое — {selected[0][0]}\n"
+            f"{selected[0][1]}\n\n"
+            f"2️⃣ Настоящее — {selected[1][0]}\n"
+            f"{selected[1][1]}\n\n"
+            f"3️⃣ Возможное будущее — {selected[2][0]}\n"
+            f"{selected[2][1]}\n\n"
+            "✨ Используй этот расклад как повод для размышления."
+        )
 
-    result = readings.get(call.data, "Расклад не найден.")
-    bot.answer_callback_query(call.id)
-    bot.send_message(call.message.chat.id, result)
+    elif call.data == "reading_question":
+        card, meaning = random.choice(cards)
+        text = (
+            "❓ Вопрос дня\n\n"
+            "Сформулируй свой вопрос про себя, затем прочитай карту:\n\n"
+            f"{card}\n\n"
+            f"{meaning}\n\n"
+            "🔮 Карта предлагает символическую интерпретацию, "
+            "а не однозначный ответ."
+        )
+
+    else:
+        text = "Расклад не найден."
+
+    bot.send_message(call.message.chat.id, text)
 
 
 def run_bot():
