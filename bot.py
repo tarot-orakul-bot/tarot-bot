@@ -346,8 +346,6 @@ def init_db():
             )
         """)
 
-        # Эти две команды безопасно добавят поля промокода
-        # в уже существующую базу.
         conn.execute("""
             ALTER TABLE users
             ADD COLUMN IF NOT EXISTS promo_code TEXT
@@ -402,9 +400,7 @@ def claim_free(user_id, field):
                 "daily_card",
                 "daily_question",
             ):
-                raise ValueError(
-                    "Неизвестная бесплатная функция"
-                )
+                raise ValueError("Неизвестная бесплатная функция")
 
             today = datetime.now(TZ).date()
 
@@ -440,7 +436,6 @@ def activate_promo(user_id, code):
         return "invalid", 0
 
     with db() as conn:
-
         row = conn.execute("""
             INSERT INTO users (
                 user_id,
@@ -481,7 +476,6 @@ def activate_promo(user_id, code):
 
 def claim_promo_credit(user_id):
     with db() as conn:
-
         row = conn.execute("""
             UPDATE users
             SET promo_credits = promo_credits - 1
@@ -583,10 +577,7 @@ def spread(kind):
             f"{meaning}"
         )
 
-    names = [
-        card[0]
-        for card in chosen
-    ]
+    names = [card[0] for card in chosen]
 
     if kind == "love":
         connection = (
@@ -731,10 +722,7 @@ def myid(message):
 
 @bot.message_handler(commands=["promo"])
 def promo(message):
-
-    parts = message.text.split(
-        maxsplit=1
-    )
+    parts = message.text.split(maxsplit=1)
 
     if len(parts) < 2:
         bot.send_message(
@@ -784,17 +772,13 @@ def promo(message):
 
 @bot.message_handler(commands=["testreading"])
 def testreading(message):
-
-    # Для остальных пользователей команда ничего не делает.
     if (
         not OWNER_ID
         or message.from_user.id != OWNER_ID
     ):
         return
 
-    parts = message.text.split(
-        maxsplit=1
-    )
+    parts = message.text.split(maxsplit=1)
 
     if (
         len(parts) < 2
@@ -824,6 +808,91 @@ def testreading(message):
 
 
 # =========================================================
+# СТАТИСТИКА ДЛЯ ВЛАДЕЛЬЦА
+# =========================================================
+
+@bot.message_handler(commands=["stats"])
+def stats(message):
+    if (
+        not OWNER_ID
+        or message.from_user.id != OWNER_ID
+    ):
+        return
+
+    today = datetime.now(TZ).date()
+
+    try:
+        with db() as conn:
+            total_users = conn.execute(
+                "SELECT COUNT(*) FROM users"
+            ).fetchone()[0]
+
+            card_today = conn.execute(
+                "SELECT COUNT(*) FROM users "
+                "WHERE daily_card = %s",
+                (today,),
+            ).fetchone()[0]
+
+            question_today = conn.execute(
+                "SELECT COUNT(*) FROM users "
+                "WHERE daily_question = %s",
+                (today,),
+            ).fetchone()[0]
+
+            free_three = conn.execute(
+                "SELECT COUNT(*) FROM users "
+                "WHERE three_used = TRUE"
+            ).fetchone()[0]
+
+            promo_users = conn.execute(
+                "SELECT COUNT(*) FROM users "
+                "WHERE promo_code IS NOT NULL"
+            ).fetchone()[0]
+
+            promo_credits_left = conn.execute(
+                "SELECT COALESCE(SUM(promo_credits), 0) "
+                "FROM users"
+            ).fetchone()[0]
+
+            successful_payments = conn.execute(
+                "SELECT COUNT(*) FROM payments"
+            ).fetchone()[0]
+
+            delivered_payments = conn.execute(
+                "SELECT COUNT(*) FROM payments "
+                "WHERE delivered = TRUE"
+            ).fetchone()[0]
+
+            support_count = conn.execute(
+                "SELECT COUNT(*) FROM support_tickets"
+            ).fetchone()[0]
+
+        stars_received = successful_payments * PRICE
+
+        bot.send_message(
+            message.chat.id,
+            "📊 Статистика Таро Оракул\n\n"
+            f"👥 Пользователей в базе: {total_users}\n\n"
+            "📅 Сегодня:\n"
+            f"🔮 Получили карту дня: {card_today}\n"
+            f"❓ Получили вопрос дня: {question_today}\n\n"
+            "🎁 Бесплатные функции:\n"
+            f"🔮 Использовали первый расклад «3 карты»: {free_three}\n"
+            f"🎟 Активировали промокод: {promo_users}\n"
+            f"🎁 Осталось промо-раскладов: {promo_credits_left}\n\n"
+            "💳 Оплата:\n"
+            f"✅ Успешных платежей: {successful_payments}\n"
+            f"📨 Выдано платных раскладов: {delivered_payments}\n"
+            f"⭐ Получено Stars: {stars_received}\n\n"
+            "🛟 Поддержка:\n"
+            f"📩 Всего обращений: {support_count}"
+        )
+
+    except Exception:
+        bot.send_message(
+            message.chat.id,
+            "❌ Не удалось получить статистику."
+        )# =========================================================
 # УСЛОВИЯ
 # =========================================================
 
@@ -1130,9 +1199,8 @@ def reading_callback(call):
         )
         return
 
-    # Сначала сохраняем старую логику:
-    # первый расклад "3 карты" бесплатный.
-    # Промокод при этом НЕ расходуется.
+    # Первый расклад "3 карты" бесплатный.
+    # Промокод при этом не расходуется.
     if kind == "three":
 
         if claim_free(
@@ -1154,8 +1222,7 @@ def reading_callback(call):
 
             return
 
-    # Если обычный бесплатный расклад уже использован,
-    # проверяем бонусы промокода.
+    # Затем проверяем бесплатные расклады по промокоду.
     remaining = claim_promo_credit(
         call.from_user.id
     )
@@ -1177,8 +1244,7 @@ def reading_callback(call):
 
         return
 
-    # Если бесплатных вариантов больше нет,
-    # запускается обычная оплата Stars.
+    # Если бесплатных вариантов нет — Stars.
     answer(call)
 
     offer_payment(
