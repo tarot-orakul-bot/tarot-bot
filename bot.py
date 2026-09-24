@@ -1,14 +1,14 @@
+import hashlib
+import hmac
 import os
 import random
-import threading
-import time
 from datetime import datetime
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import psycopg
 import telebot
-from flask import Flask
+from flask import Flask, abort, request
 from telebot import types
 
 
@@ -17,12 +17,15 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 OWNER_ID = int(os.getenv("BOT_OWNER_ID", "0"))
 PRICE = 15
 TZ = ZoneInfo("Asia/Yekaterinburg")
+WEBHOOK_BASE_URL = os.getenv("RENDER_EXTERNAL_URL")
+WEBHOOK_PATH = "/telegram-webhook"
 
 if not TOKEN or not DATABASE_URL:
     raise RuntimeError("Нужны переменные BOT_TOKEN и DATABASE_URL в Render")
 
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
+WEBHOOK_SECRET = hashlib.sha256(TOKEN.encode()).hexdigest()
 
 # Для каждой карты: название, общий смысл, любовь, деньги.
 CARDS = [
@@ -129,6 +132,19 @@ def home():
     return "Tarot Orakul Bot is running", 200
 
 
+@app.post(WEBHOOK_PATH)
+def telegram_webhook():
+    received_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+    if not hmac.compare_digest(received_secret, WEBHOOK_SECRET):
+        abort(403)
+    if not request.is_json:
+        abort(415)
+
+    update = types.Update.de_json(request.get_data(as_text=True))
+    bot.process_new_updates([update])
+    return "", 200
+
+
 def db():
     return psycopg.connect(DATABASE_URL, connect_timeout=5)
 
@@ -165,7 +181,6 @@ def init_db():
 
 
 def claim_free(user_id, field):
-    """Резервирует одну бесплатную попытку в PostgreSQL."""
     with db() as conn:
         if field == "three_used":
             row = conn.execute("""
@@ -572,25 +587,20 @@ def other_text(message):
         )
 
 
-def run_bot():
-    while True:
-        try:
-            bot.infinity_polling(
-                skip_pending=False,
-                allowed_updates=[
-                    "message",
-                    "callback_query",
-                    "pre_checkout_query",
-                ],
-            )
-        except Exception as exc:
-            print(f"Bot error: {exc}", flush=True)
-            time.sleep(5)
-
-
 if __name__ == "__main__":
     init_db()
-    threading.Thread(target=run_bot, daemon=True).start()
+
+    if not WEBHOOK_BASE_URL:
+        raise RuntimeError("Render не предоставил RENDER_EXTERNAL_URL")
+
+    bot.set_webhook(
+        url=WEBHOOK_BASE_URL.rstrip("/") + WEBHOOK_PATH,
+        allowed_updates=["message", "callback_query", "pre_checkout_query"],
+        secret_token=WEBHOOK_SECRET,
+        drop_pending_updates=False,
+        max_connections=1,
+    )
+
     app.run(
         host="0.0.0.0",
         port=int(os.environ.get("PORT", 10000)),
