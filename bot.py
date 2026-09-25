@@ -1220,9 +1220,7 @@ def personalized_focus(kind, topic):
         topic,
         "Посмотри на карты как на дополнительный символический ракурс ситуации.",
     )
-
-
-# =========================================================
+    # =========================================================
 # СОЗДАНИЕ РАСКЛАДА
 # =========================================================
 
@@ -1558,13 +1556,33 @@ def invoice_details(payload, user_id):
 
 
 # =========================================================
-# /START
+# /START — С ПРИВЕТСТВЕННОЙ GIF
 # =========================================================
 
 @bot.message_handler(commands=["start"])
 def start(message):
     touch_user(message.from_user.id)
     clear_pending_reading(message.from_user.id)
+
+    try:
+        gif_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "taro_orakul_7sec.gif",
+        )
+
+        with open(gif_path, "rb") as animation:
+            bot.send_animation(
+                chat_id=message.chat.id,
+                animation=animation,
+                caption="🔮 ТАРО ОРАКУЛ",
+            )
+
+    except Exception as exc:
+        print(
+            "Ошибка приветственной GIF:",
+            repr(exc),
+            flush=True,
+        )
 
     bot.send_message(
         message.chat.id,
