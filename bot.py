@@ -2,6 +2,8 @@ import hashlib
 import hmac
 import os
 import random
+import threading
+import time
 from datetime import datetime, timedelta
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -25,6 +27,12 @@ TZ = ZoneInfo("Asia/Yekaterinburg")
 
 PROMO_CODE = "FRIEND"
 PROMO_CREDITS = 3
+
+# Через сколько дней неактивности отправлять мягкое напоминание
+REMINDER_AFTER_DAYS = 3
+
+# Как часто бот проверяет, кому пора отправить напоминание
+REMINDER_CHECK_SECONDS = 60 * 60
 
 WEBHOOK_BASE_URL = os.getenv("RENDER_EXTERNAL_URL")
 WEBHOOK_PATH = "/telegram-webhook"
@@ -430,6 +438,18 @@ def init_db():
             ADD COLUMN IF NOT EXISTS pending_period TEXT
         """)
 
+        # Настройки мягких напоминаний
+        conn.execute("""
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS reminders_enabled
+            BOOLEAN NOT NULL DEFAULT TRUE
+        """)
+
+        conn.execute("""
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ
+        """)
+
         conn.execute("""
             UPDATE users
             SET created_at = COALESCE(created_at, now())
@@ -462,6 +482,21 @@ def init_db():
             ADD COLUMN IF NOT EXISTS period TEXT
         """)
 
+        # Фактическая сумма платежа.
+        # Новые платежи сохраняют реальное total_amount Telegram.
+        conn.execute("""
+            ALTER TABLE payments
+            ADD COLUMN IF NOT EXISTS amount INTEGER
+        """)
+
+        # Для уже существующих платежей текущей версии
+        # восстанавливаем сумму по текущей цене 50 Stars.
+        conn.execute("""
+            UPDATE payments
+            SET amount = %s
+            WHERE amount IS NULL
+        """, (PRICE,))
+
         conn.execute("""
             CREATE TABLE IF NOT EXISTS support_tickets (
                 id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -482,13 +517,15 @@ def touch_user(user_id):
             INSERT INTO users (
                 user_id,
                 created_at,
-                last_seen
+                last_seen,
+                reminder_sent_at
             )
-            VALUES (%s, now(), now())
+            VALUES (%s, now(), now(), NULL)
 
             ON CONFLICT (user_id)
             DO UPDATE SET
-                last_seen = now()
+                last_seen = now(),
+                reminder_sent_at = NULL
         """, (user_id,))
 
 
@@ -500,14 +537,16 @@ def claim_free(user_id, field):
                     user_id,
                     three_used,
                     created_at,
-                    last_seen
+                    last_seen,
+                    reminder_sent_at
                 )
-                VALUES (%s, TRUE, now(), now())
+                VALUES (%s, TRUE, now(), now(), NULL)
 
                 ON CONFLICT (user_id)
                 DO UPDATE SET
                     three_used = TRUE,
-                    last_seen = now()
+                    last_seen = now(),
+                    reminder_sent_at = NULL
                 WHERE users.three_used = FALSE
 
                 RETURNING user_id
@@ -529,14 +568,16 @@ def claim_free(user_id, field):
                     user_id,
                     {field},
                     created_at,
-                    last_seen
+                    last_seen,
+                    reminder_sent_at
                 )
-                VALUES (%s, %s, now(), now())
+                VALUES (%s, %s, now(), now(), NULL)
 
                 ON CONFLICT (user_id)
                 DO UPDATE SET
                     {field} = EXCLUDED.{field},
-                    last_seen = now()
+                    last_seen = now(),
+                    reminder_sent_at = NULL
                 WHERE users.{field}
                     IS DISTINCT FROM EXCLUDED.{field}
 
@@ -568,7 +609,8 @@ def set_pending_reading(
                 pending_kind = %s,
                 pending_topic = %s,
                 pending_period = %s,
-                last_seen = now()
+                last_seen = now(),
+                reminder_sent_at = NULL
             WHERE user_id = %s
         """, (
             kind,
@@ -603,7 +645,8 @@ def clear_pending_reading(user_id):
                 pending_kind = NULL,
                 pending_topic = NULL,
                 pending_period = NULL,
-                last_seen = now()
+                last_seen = now(),
+                reminder_sent_at = NULL
             WHERE user_id = %s
         """, (user_id,))
 
@@ -639,7 +682,8 @@ def activate_promo(user_id, code):
             DO UPDATE SET
                 promo_code = EXCLUDED.promo_code,
                 promo_credits = EXCLUDED.promo_credits,
-                last_seen = now()
+                last_seen = now(),
+                reminder_sent_at = NULL
             WHERE users.promo_code IS NULL
 
             RETURNING promo_credits
@@ -654,7 +698,9 @@ def activate_promo(user_id, code):
 
         current = conn.execute("""
             UPDATE users
-            SET last_seen = now()
+            SET
+                last_seen = now(),
+                reminder_sent_at = NULL
             WHERE user_id = %s
             RETURNING promo_credits
         """, (user_id,)).fetchone()
@@ -671,7 +717,8 @@ def claim_promo_credit(user_id):
             UPDATE users
             SET
                 promo_credits = promo_credits - 1,
-                last_seen = now()
+                last_seen = now(),
+                reminder_sent_at = NULL
             WHERE user_id = %s
               AND promo_credits > 0
             RETURNING promo_credits
@@ -700,6 +747,10 @@ def main_keyboard():
     keyboard.row(
         "✨ Сделать расклад",
         "ℹ️ О боте",
+    )
+
+    keyboard.row(
+        "🔔 Напоминания",
     )
 
     return keyboard
@@ -778,6 +829,47 @@ def periods_keyboard():
             callback_data="reading_cancel",
         )
     )
+
+    return keyboard
+
+
+def reminder_message_keyboard():
+    keyboard = types.InlineKeyboardMarkup()
+
+    keyboard.add(
+        types.InlineKeyboardButton(
+            "🔮 Получить карту дня",
+            callback_data="reminder_get_card",
+        )
+    )
+
+    keyboard.add(
+        types.InlineKeyboardButton(
+            "🔕 Отключить напоминания",
+            callback_data="reminders_off",
+        )
+    )
+
+    return keyboard
+
+
+def reminder_settings_keyboard(enabled):
+    keyboard = types.InlineKeyboardMarkup()
+
+    if enabled:
+        keyboard.add(
+            types.InlineKeyboardButton(
+                "🔕 Отключить напоминания",
+                callback_data="reminders_off",
+            )
+        )
+    else:
+        keyboard.add(
+            types.InlineKeyboardButton(
+                "🔔 Включить напоминания",
+                callback_data="reminders_on",
+            )
+        )
 
     return keyboard
 
@@ -1210,6 +1302,143 @@ def answer(call, text=None):
 
 
 # =========================================================
+# НАПОМИНАНИЯ
+# =========================================================
+
+def get_reminders_enabled(user_id):
+    with db() as conn:
+        row = conn.execute("""
+            SELECT reminders_enabled
+            FROM users
+            WHERE user_id = %s
+        """, (user_id,)).fetchone()
+
+    if not row:
+        return True
+
+    return bool(row[0])
+
+
+def set_reminders_enabled(user_id, enabled):
+    touch_user(user_id)
+
+    with db() as conn:
+        conn.execute("""
+            UPDATE users
+            SET
+                reminders_enabled = %s,
+                reminder_sent_at = NULL
+            WHERE user_id = %s
+        """, (
+            enabled,
+            user_id,
+        ))
+
+
+def send_inactivity_reminders():
+    """
+    Находит пользователей, которые не проявляли активность
+    REMINDER_AFTER_DAYS дней.
+
+    Одно напоминание отправляется только один раз.
+    После следующего действия пользователя reminder_sent_at
+    сбрасывается и новый цикл начинается заново.
+    """
+
+    cutoff = (
+        datetime.now(TZ)
+        - timedelta(days=REMINDER_AFTER_DAYS)
+    )
+
+    try:
+        with db() as conn:
+            rows = conn.execute("""
+                SELECT user_id
+                FROM users
+                WHERE reminders_enabled = TRUE
+                  AND last_seen IS NOT NULL
+                  AND last_seen <= %s
+                  AND reminder_sent_at IS NULL
+                ORDER BY last_seen ASC
+                LIMIT 100
+            """, (cutoff,)).fetchall()
+
+        for row in rows:
+            user_id = row[0]
+
+            # Сначала атомарно помечаем пользователя,
+            # чтобы два процесса не отправили одно и то же.
+            with db() as conn:
+                claimed = conn.execute("""
+                    UPDATE users
+                    SET reminder_sent_at = now()
+                    WHERE user_id = %s
+                      AND reminders_enabled = TRUE
+                      AND last_seen <= %s
+                      AND reminder_sent_at IS NULL
+                    RETURNING user_id
+                """, (
+                    user_id,
+                    cutoff,
+                )).fetchone()
+
+            if not claimed:
+                continue
+
+            try:
+                bot.send_message(
+                    user_id,
+                    "🔮 Заглянем в карты?\n\n"
+                    "Твоя бесплатная Карта дня ждёт тебя ✨\n\n"
+                    "Если захочешь — открой её одним нажатием.",
+                    reply_markup=reminder_message_keyboard(),
+                )
+
+            except Exception:
+                # Если Telegram не позволяет писать пользователю
+                # (например, бот заблокирован), больше его не беспокоим.
+                try:
+                    with db() as conn:
+                        conn.execute("""
+                            UPDATE users
+                            SET reminders_enabled = FALSE
+                            WHERE user_id = %s
+                        """, (user_id,))
+                except Exception:
+                    pass
+
+            # Небольшая пауза между сообщениями.
+            time.sleep(0.2)
+
+    except Exception as exc:
+        print(
+            "Ошибка проверки напоминаний:",
+            repr(exc),
+            flush=True,
+        )
+
+
+def reminder_worker():
+    # Небольшая задержка после запуска Render,
+    # чтобы приложение успело полностью подняться.
+    time.sleep(15)
+
+    while True:
+        try:
+            send_inactivity_reminders()
+        except Exception as exc:
+            print(
+                "Ошибка reminder_worker:",
+                repr(exc),
+                flush=True,
+            )
+
+        time.sleep(
+            REMINDER_CHECK_SECONDS
+        )
+
+
+# =========================================================
 # INVOICE PAYLOAD
 # =========================================================
 
@@ -1299,6 +1528,121 @@ def myid(message):
     bot.send_message(
         message.chat.id,
         f"Твой Telegram ID: {message.from_user.id}",
+    )
+
+
+# =========================================================
+# НАСТРОЙКИ НАПОМИНАНИЙ
+# =========================================================
+
+@bot.message_handler(
+    func=lambda m:
+    m.text == "🔔 Напоминания"
+)
+def reminders_settings(message):
+    touch_user(message.from_user.id)
+
+    enabled = get_reminders_enabled(
+        message.from_user.id
+    )
+
+    if enabled:
+        text = (
+            "🔔 Напоминания включены.\n\n"
+            f"Если ты не заходишь в бот {REMINDER_AFTER_DAYS} дня, "
+            "я могу один раз мягко напомнить о Карте дня.\n\n"
+            "Каждый день писать не буду 🙂"
+        )
+    else:
+        text = (
+            "🔕 Напоминания выключены.\n\n"
+            "Бот не будет сам присылать сообщения.\n\n"
+            "Ты можешь включить их снова в любой момент."
+        )
+
+    bot.send_message(
+        message.chat.id,
+        text,
+        reply_markup=reminder_settings_keyboard(
+            enabled
+        ),
+    )
+
+
+@bot.callback_query_handler(
+    func=lambda c:
+    c.data == "reminders_off"
+)
+def reminders_off(call):
+    # Здесь специально не используем touch_user после изменения,
+    # чтобы настройка сохранилась.
+    set_reminders_enabled(
+        call.from_user.id,
+        False,
+    )
+
+    answer(
+        call,
+        "Напоминания выключены",
+    )
+
+    bot.send_message(
+        call.message.chat.id,
+        "🔕 Готово. Напоминания выключены.\n\n"
+        "Бот больше не будет сам присылать такие сообщения.",
+        reply_markup=main_keyboard(),
+    )
+
+
+@bot.callback_query_handler(
+    func=lambda c:
+    c.data == "reminders_on"
+)
+def reminders_on(call):
+    set_reminders_enabled(
+        call.from_user.id,
+        True,
+    )
+
+    answer(
+        call,
+        "Напоминания включены",
+    )
+
+    bot.send_message(
+        call.message.chat.id,
+        "🔔 Напоминания включены.\n\n"
+        f"Если тебя не будет {REMINDER_AFTER_DAYS} дня, "
+        "бот сможет один раз мягко напомнить о Карте дня.",
+        reply_markup=main_keyboard(),
+    )
+
+
+@bot.callback_query_handler(
+    func=lambda c:
+    c.data == "reminder_get_card"
+)
+def reminder_get_card(call):
+    touch_user(call.from_user.id)
+
+    answer(call)
+
+    if not claim_free(
+        call.from_user.id,
+        "daily_card",
+    ):
+        bot.send_message(
+            call.message.chat.id,
+            "🔮 Ты уже получил карту дня сегодня.\n\n"
+            "Возвращайся завтра ✨",
+            reply_markup=main_keyboard(),
+        )
+        return
+
+    bot.send_message(
+        call.message.chat.id,
+        day_card_text(),
+        reply_markup=main_keyboard(),
     )
 
 
@@ -1507,15 +1851,32 @@ def stats(message):
                 WHERE delivered = TRUE
             """).fetchone()[0]
 
+            # Теперь считаем реальную сумму платежей,
+            # а не количество платежей × текущую цену.
+            stars_received = conn.execute("""
+                SELECT COALESCE(
+                    SUM(amount),
+                    0
+                )
+                FROM payments
+            """).fetchone()[0]
+
+            reminders_on_count = conn.execute("""
+                SELECT COUNT(*)
+                FROM users
+                WHERE reminders_enabled = TRUE
+            """).fetchone()[0]
+
+            reminders_sent_count = conn.execute("""
+                SELECT COUNT(*)
+                FROM users
+                WHERE reminder_sent_at IS NOT NULL
+            """).fetchone()[0]
+
             support_count = conn.execute("""
                 SELECT COUNT(*)
                 FROM support_tickets
             """).fetchone()[0]
-
-        stars_received = (
-            successful_payments
-            * PRICE
-        )
 
         bot.send_message(
             message.chat.id,
@@ -1535,6 +1896,9 @@ def stats(message):
             f"✅ Успешных платежей: {successful_payments}\n"
             f"📨 Выдано платных раскладов: {delivered_payments}\n"
             f"⭐ Получено Stars: {stars_received}\n\n"
+            "🔔 Напоминания:\n"
+            f"Включены у пользователей: {reminders_on_count}\n"
+            f"Сейчас отправлено и ожидает возвращения: {reminders_sent_count}\n\n"
             "🛟 Поддержка:\n"
             f"📩 Всего обращений: {support_count}"
         )
@@ -1544,7 +1908,9 @@ def stats(message):
             message.chat.id,
             "❌ Не удалось получить статистику."
         )
-        # =========================================================
+
+
+# =========================================================
 # УСЛОВИЯ
 # =========================================================
 
@@ -1569,6 +1935,8 @@ def terms(message):
         "Все расклады являются символической развлекательной "
         "интерпретацией и не являются точным предсказанием, "
         "медицинской, финансовой или юридической консультацией.\n\n"
+        "🔔 Напоминания можно отключить через кнопку "
+        "«🔔 Напоминания» в меню.\n\n"
         "Проблема с оплатой или результатом: /paysupport."
     )
 
@@ -1605,7 +1973,8 @@ def support(message):
             ON CONFLICT (user_id)
             DO UPDATE SET
                 support_pending = TRUE,
-                last_seen = now()
+                last_seen = now(),
+                reminder_sent_at = NULL
         """, (
             message.from_user.id,
         ))
@@ -1789,6 +2158,8 @@ def about(message):
         "бесплатно каждый день.\n"
         "🔮 Первый расклад «3 карты» — бесплатно.\n"
         f"⭐ Платные расклады — {PRICE} Stars.\n\n"
+        "🔔 Мягкие напоминания можно включить "
+        "или выключить через меню.\n\n"
         "📖 Условия: /terms\n"
         "🛟 Поддержка: /support\n"
         "💳 Проблема с оплатой: /paysupport",
@@ -2055,8 +2426,6 @@ def period_callback(call):
         "Перемешиваю колоду… 🔮",
     )
 
-    # Первый расклад «3 карты»
-    # используется только после выбора темы и периода.
     if kind == "three":
         if claim_free(
             call.from_user.id,
@@ -2085,8 +2454,6 @@ def period_callback(call):
 
             return
 
-    # Если обычный бесплатный расклад
-    # уже использован, проверяем промокод.
     remaining = claim_promo_credit(
         call.from_user.id
     )
@@ -2117,7 +2484,6 @@ def period_callback(call):
 
         return
 
-    # Бесплатных вариантов нет.
     offer_payment(
         call.message.chat.id,
         call.from_user.id,
@@ -2153,13 +2519,6 @@ def send_invoice(
 
     title = SPREADS[kind][0]
 
-    # ВАЖНО:
-    # вид расклада, тема и период находятся
-    # непосредственно внутри invoice payload.
-    #
-    # Поэтому оплаченный счёт остаётся связан
-    # именно с тем раскладом, для которого
-    # пользователь его открыл.
     payload = make_invoice_payload(
         kind,
         topic,
@@ -2214,8 +2573,6 @@ def offer_payment(
         )
         return
 
-    # Pending сохраняем для интерфейса,
-    # но оплаченный счёт от него уже не зависит.
     set_pending_reading(
         user_id,
         kind=kind,
@@ -2245,9 +2602,6 @@ def offer_payment(
 
     keyboard = types.InlineKeyboardMarkup()
 
-    # В callback тоже передаём параметры.
-    # Коды короткие и помещаются
-    # в ограничение Telegram callback_data.
     keyboard.add(
         types.InlineKeyboardButton(
             "📖 Условия",
@@ -2367,7 +2721,8 @@ def agree(call):
             ON CONFLICT (user_id)
             DO UPDATE SET
                 terms_accepted = TRUE,
-                last_seen = now()
+                last_seen = now(),
+                reminder_sent_at = NULL
         """, (
             call.from_user.id,
         ))
@@ -2490,8 +2845,6 @@ def payment_success(message):
         payment.telegram_payment_charge_id
     )
 
-    # Сначала проверяем, не обрабатывали
-    # ли этот Telegram-платёж раньше.
     with db() as conn:
         existing = conn.execute(
             """
@@ -2533,7 +2886,8 @@ def payment_success(message):
                     result,
                     delivered,
                     topic,
-                    period
+                    period,
+                    amount
                 )
                 VALUES (
                     %s,
@@ -2541,6 +2895,7 @@ def payment_success(message):
                     %s,
                     %s,
                     FALSE,
+                    %s,
                     %s,
                     %s
                 )
@@ -2554,6 +2909,7 @@ def payment_success(message):
                 result,
                 topic,
                 period,
+                payment.total_amount,
             ))
 
             stored = conn.execute(
@@ -2601,9 +2957,6 @@ def payment_success(message):
         )
 
     except Exception:
-        # delivered остаётся FALSE.
-        # Это позволяет не считать результат
-        # успешно выданным при ошибке отправки.
         return
 
     with db() as conn:
@@ -2678,7 +3031,8 @@ def other_text(message):
             UPDATE users
             SET
                 support_pending = FALSE,
-                last_seen = now()
+                last_seen = now(),
+                reminder_sent_at = NULL
             WHERE user_id = %s
         """, (
             message.from_user.id,
@@ -2734,6 +3088,14 @@ if __name__ == "__main__":
         drop_pending_updates=False,
         max_connections=1,
     )
+
+    # Фоновая проверка мягких напоминаний
+    reminder_thread = threading.Thread(
+        target=reminder_worker,
+        daemon=True,
+        name="reminder-worker",
+    )
+    reminder_thread.start()
 
     app.run(
         host="0.0.0.0",
