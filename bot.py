@@ -1567,7 +1567,7 @@ def start(message):
     try:
         gif_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
-            "taro_orakul_7sec.gif",
+            "9062F346-A2BF-4C00-9A56-9599938CD487.MP4",
         )
 
         with open(gif_path, "rb") as animation:
