@@ -1220,7 +1220,9 @@ def personalized_focus(kind, topic):
         topic,
         "Посмотри на карты как на дополнительный символический ракурс ситуации.",
     )
-    # =========================================================
+
+
+# =========================================================
 # СОЗДАНИЕ РАСКЛАДА
 # =========================================================
 
@@ -1996,6 +1998,72 @@ def support(message):
         "🛟 Опиши проблему одним сообщением.\n\n"
         "Не присылай пароль, токен или данные банковской карты.",
     )
+    @bot.message_handler(commands=["supportlist"])
+def support_list(message):
+    if not OWNER_ID or message.from_user.id != OWNER_ID:
+        return
+
+    touch_user(message.from_user.id)
+
+    try:
+        with db() as conn:
+            rows = conn.execute("""
+                SELECT
+                    id,
+                    user_id,
+                    body,
+                    created_at
+                FROM support_tickets
+                ORDER BY id DESC
+                LIMIT 10
+            """).fetchall()
+
+        if not rows:
+            bot.send_message(
+                message.chat.id,
+                "🛟 Обращений в поддержку пока нет.",
+            )
+            return
+
+        bot.send_message(
+            message.chat.id,
+            "🛟 Последние обращения в поддержку\n\n"
+            "Показываю последние 10 обращений:",
+        )
+
+        for ticket_id, user_id, body, created_at in rows:
+            if created_at:
+                try:
+                    created_local = created_at.astimezone(TZ)
+                    created_text = created_local.strftime(
+                        "%d.%m.%Y %H:%M"
+                    )
+                except Exception:
+                    created_text = str(created_at)
+            else:
+                created_text = "Неизвестно"
+
+            bot.send_message(
+                message.chat.id,
+                f"🎫 Обращение №{ticket_id}\n\n"
+                f"👤 Telegram ID: {user_id}\n"
+                f"🕐 {created_text}\n\n"
+                f"💬 Сообщение:\n{body}\n\n"
+                f"↩️ Ответить:\n"
+                f"/reply {ticket_id} текст",
+            )
+
+    except Exception as exc:
+        print(
+            "Ошибка /supportlist:",
+            repr(exc),
+            flush=True,
+        )
+
+        bot.send_message(
+            message.chat.id,
+            "❌ Не удалось загрузить обращения.",
+        )
 
 
 @bot.message_handler(commands=["reply"])
