@@ -271,32 +271,19 @@ CARDS = [
 SPREADS = {
     "love": (
         "💕 Расклад на любовь",
-        (
-            "Что влияет на ситуацию",
-            "Что происходит сейчас",
-            "Куда может двигаться ситуация",
-        ),
+        ("Что влияет на ситуацию", "Что происходит сейчас", "Куда может двигаться ситуация"),
     ),
     "money": (
         "💰 Расклад на деньги",
-        (
-            "Текущая ситуация",
-            "Возможность",
-            "На что обратить внимание",
-        ),
+        ("Текущая ситуация", "Возможность", "На что обратить внимание"),
     ),
     "three": (
         "🔮 Расклад «3 карты»",
-        (
-            "Прошлое",
-            "Настоящее",
-            "Возможное будущее",
-        ),
+        ("Прошлое", "Настоящее", "Возможное будущее"),
     ),
 }
 
 NUMBERS = ("1️⃣", "2️⃣", "3️⃣")
-
 
 TOPICS = {
     "love": {
@@ -342,8 +329,7 @@ def home():
 @app.post(WEBHOOK_PATH)
 def telegram_webhook():
     received_secret = request.headers.get(
-        "X-Telegram-Bot-Api-Secret-Token",
-        "",
+        "X-Telegram-Bot-Api-Secret-Token", ""
     )
 
     if not hmac.compare_digest(received_secret, WEBHOOK_SECRET):
@@ -363,10 +349,7 @@ def telegram_webhook():
 # =========================================================
 
 def db():
-    return psycopg.connect(
-        DATABASE_URL,
-        connect_timeout=5,
-    )
+    return psycopg.connect(DATABASE_URL, connect_timeout=5)
 
 
 def init_db():
@@ -424,20 +407,9 @@ def init_db():
             )
         """)
 
-        conn.execute("""
-            ALTER TABLE payments
-            ADD COLUMN IF NOT EXISTS topic TEXT
-        """)
-
-        conn.execute("""
-            ALTER TABLE payments
-            ADD COLUMN IF NOT EXISTS period TEXT
-        """)
-
-        conn.execute("""
-            ALTER TABLE payments
-            ADD COLUMN IF NOT EXISTS amount INTEGER
-        """)
+        conn.execute("ALTER TABLE payments ADD COLUMN IF NOT EXISTS topic TEXT")
+        conn.execute("ALTER TABLE payments ADD COLUMN IF NOT EXISTS period TEXT")
+        conn.execute("ALTER TABLE payments ADD COLUMN IF NOT EXISTS amount INTEGER")
 
         conn.execute("""
             UPDATE payments
@@ -463,10 +435,7 @@ def touch_user(user_id):
     with db() as conn:
         conn.execute("""
             INSERT INTO users (
-                user_id,
-                created_at,
-                last_seen,
-                reminder_sent_at
+                user_id, created_at, last_seen, reminder_sent_at
             )
             VALUES (%s, now(), now(), NULL)
 
@@ -482,11 +451,7 @@ def claim_free(user_id, field):
         if field == "three_used":
             row = conn.execute("""
                 INSERT INTO users (
-                    user_id,
-                    three_used,
-                    created_at,
-                    last_seen,
-                    reminder_sent_at
+                    user_id, three_used, created_at, last_seen, reminder_sent_at
                 )
                 VALUES (%s, TRUE, now(), now(), NULL)
 
@@ -508,11 +473,7 @@ def claim_free(user_id, field):
 
             row = conn.execute(f"""
                 INSERT INTO users (
-                    user_id,
-                    {field},
-                    created_at,
-                    last_seen,
-                    reminder_sent_at
+                    user_id, {field}, created_at, last_seen, reminder_sent_at
                 )
                 VALUES (%s, %s, now(), now(), NULL)
 
@@ -521,8 +482,7 @@ def claim_free(user_id, field):
                     {field} = EXCLUDED.{field},
                     last_seen = now(),
                     reminder_sent_at = NULL
-                WHERE users.{field}
-                    IS DISTINCT FROM EXCLUDED.{field}
+                WHERE users.{field} IS DISTINCT FROM EXCLUDED.{field}
 
                 RETURNING user_id
             """, (user_id, today)).fetchone()
@@ -553,10 +513,7 @@ def set_pending_reading(user_id, kind=None, topic=None, period=None):
 def get_pending_reading(user_id):
     with db() as conn:
         row = conn.execute("""
-            SELECT
-                pending_kind,
-                pending_topic,
-                pending_period
+            SELECT pending_kind, pending_topic, pending_period
             FROM users
             WHERE user_id = %s
         """, (user_id,)).fetchone()
@@ -620,10 +577,7 @@ def save_profile_name(user_id, name):
     with db() as conn:
         conn.execute("""
             UPDATE users
-            SET
-                profile_name = %s,
-                last_seen = now(),
-                reminder_sent_at = NULL
+            SET profile_name = %s, last_seen = now(), reminder_sent_at = NULL
             WHERE user_id = %s
         """, (name, user_id))
 
@@ -632,10 +586,7 @@ def save_profile_age(user_id, age):
     with db() as conn:
         conn.execute("""
             UPDATE users
-            SET
-                profile_age = %s,
-                last_seen = now(),
-                reminder_sent_at = NULL
+            SET profile_age = %s, last_seen = now(), reminder_sent_at = NULL
             WHERE user_id = %s
         """, (age, user_id))
 
@@ -644,10 +595,7 @@ def save_other_name(user_id, name):
     with db() as conn:
         conn.execute("""
             UPDATE users
-            SET
-                other_name = %s,
-                last_seen = now(),
-                reminder_sent_at = NULL
+            SET other_name = %s, last_seen = now(), reminder_sent_at = NULL
             WHERE user_id = %s
         """, (name, user_id))
 
@@ -656,10 +604,7 @@ def save_other_age(user_id, age):
     with db() as conn:
         conn.execute("""
             UPDATE users
-            SET
-                other_age = %s,
-                last_seen = now(),
-                reminder_sent_at = NULL
+            SET other_age = %s, last_seen = now(), reminder_sent_at = NULL
             WHERE user_id = %s
         """, (age, user_id))
 
@@ -667,13 +612,84 @@ def save_other_age(user_id, age):
 def needs_other_person(kind, topic):
     return (
         kind == "love"
-        and topic in (
-            "current",
-            "feelings",
-            "ex",
-            "future",
+        and topic in ("current", "feelings", "ex", "future")
+    )
+
+
+# =========================================================
+# КЛАВИАТУРЫ
+# =========================================================
+
+def main_keyboard():
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.row("🔮 Карта дня", "❓ Вопрос дня")
+    keyboard.row("✨ Сделать расклад", "ℹ️ О боте")
+    keyboard.row("🔔 Напоминания")
+    return keyboard
+
+
+def readings_keyboard():
+    keyboard = types.InlineKeyboardMarkup()
+
+    keyboard.add(
+        types.InlineKeyboardButton("💕 Любовь", callback_data="reading_love"),
+        types.InlineKeyboardButton("💰 Деньги", callback_data="reading_money"),
+    )
+
+    keyboard.add(
+        types.InlineKeyboardButton("🔮 3 карты", callback_data="reading_three")
+    )
+
+    return keyboard
+
+
+def topics_keyboard(kind):
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+
+    for topic_key, topic_title in TOPICS[kind].items():
+        keyboard.add(
+            types.InlineKeyboardButton(
+                topic_title,
+                callback_data=f"topic:{kind}:{topic_key}",
+            )
+        )
+
+    keyboard.add(
+        types.InlineKeyboardButton(
+            "❌ Отменить",
+            callback_data="reading_cancel",
         )
     )
+
+    return keyboard
+
+
+def periods_keyboard():
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+
+    for period_key, period_title in PERIODS.items():
+        keyboard.add(
+            types.InlineKeyboardButton(
+                period_title,
+                callback_data=f"period:{period_key}",
+            )
+        )
+
+    keyboard.add(
+        types.InlineKeyboardButton(
+            "⬅️ Назад к теме",
+            callback_data="reading_back_topic",
+        )
+    )
+
+    keyboard.add(
+        types.InlineKeyboardButton(
+            "❌ Отменить",
+            callback_data="reading_cancel",
+        )
+    )
+
+    return keyboard
 
 
 def profile_keyboard():
@@ -717,264 +733,6 @@ def other_profile_keyboard():
         types.InlineKeyboardButton(
             "✏️ Изменить данные",
             callback_data="other_change",
-        )
-    )
-
-    keyboard.add(
-        types.InlineKeyboardButton(
-            "❌ Отменить",
-            callback_data="reading_cancel",
-        )
-    )
-
-    return keyboard
-
-
-def begin_profile(chat_id, user_id):
-    name, age, _, _, _ = get_profile(user_id)
-
-    if name and age:
-        set_form_step(user_id, "profile_confirm")
-
-        bot.send_message(
-            chat_id,
-            "👤 Для персонализации расклада у меня сохранены данные:\n\n"
-            f"Имя: {name}\n"
-            f"Возраст: {age}\n\n"
-            "Использовать их?",
-            reply_markup=profile_keyboard(),
-        )
-        return
-
-    set_form_step(user_id, "name")
-
-    bot.send_message(
-        chat_id,
-        "👤 Перед раскладом немного персонализируем его.\n\n"
-        "Как тебя зовут?\n\n"
-        "Напиши только имя.",
-    )
-
-
-def continue_after_main_profile(chat_id, user_id):
-    kind, topic, period = get_pending_reading(user_id)
-
-    if not valid_reading_params(kind, topic, period):
-        clear_pending_reading(user_id)
-
-        bot.send_message(
-            chat_id,
-            "Параметры расклада потеряны.\n\n"
-            "Начни расклад заново.",
-            reply_markup=main_keyboard(),
-        )
-        return
-
-    if needs_other_person(kind, topic):
-        _, _, other_name, other_age, _ = get_profile(user_id)
-
-        if other_name and other_age:
-            set_form_step(user_id, "other_confirm")
-
-            bot.send_message(
-                chat_id,
-                "💕 Для этого любовного расклада у меня сохранены данные второго человека:\n\n"
-                f"Имя: {other_name}\n"
-                f"Возраст: {other_age}\n\n"
-                "Использовать их?",
-                reply_markup=other_profile_keyboard(),
-            )
-            return
-
-        set_form_step(user_id, "other_name")
-
-        bot.send_message(
-            chat_id,
-            "💕 Теперь укажи имя человека, о котором этот расклад.\n\n"
-            "Напиши только имя.",
-        )
-        return
-
-    finish_profile_and_process(chat_id, user_id)
-
-
-def finish_profile_and_process(chat_id, user_id):
-    set_form_step(user_id, None)
-
-    kind, topic, period = get_pending_reading(user_id)
-
-    if not valid_reading_params(kind, topic, period):
-        clear_pending_reading(user_id)
-
-        bot.send_message(
-            chat_id,
-            "Параметры расклада потеряны.\n\n"
-            "Начни расклад заново.",
-            reply_markup=main_keyboard(),
-        )
-        return
-
-    process_selected_reading(
-        chat_id,
-        user_id,
-        kind,
-        topic,
-        period,
-    )
-
-
-# =========================================================
-# ПРОМОКОД
-# =========================================================
-
-def activate_promo(user_id, code):
-    normalized_code = code.strip().upper()
-
-    if normalized_code != PROMO_CODE:
-        return "invalid", 0
-
-    with db() as conn:
-        row = conn.execute("""
-            INSERT INTO users (
-                user_id,
-                promo_code,
-                promo_credits,
-                created_at,
-                last_seen
-            )
-            VALUES (%s, %s, %s, now(), now())
-
-            ON CONFLICT (user_id)
-            DO UPDATE SET
-                promo_code = EXCLUDED.promo_code,
-                promo_credits = EXCLUDED.promo_credits,
-                last_seen = now(),
-                reminder_sent_at = NULL
-            WHERE users.promo_code IS NULL
-
-            RETURNING promo_credits
-        """, (
-            user_id,
-            PROMO_CODE,
-            PROMO_CREDITS,
-        )).fetchone()
-
-        if row:
-            return "activated", row[0]
-
-        current = conn.execute("""
-            UPDATE users
-            SET
-                last_seen = now(),
-                reminder_sent_at = NULL
-            WHERE user_id = %s
-            RETURNING promo_credits
-        """, (user_id,)).fetchone()
-
-        return "already", current[0] if current else 0
-
-
-def claim_promo_credit(user_id):
-    with db() as conn:
-        row = conn.execute("""
-            UPDATE users
-            SET
-                promo_credits = promo_credits - 1,
-                last_seen = now(),
-                reminder_sent_at = NULL
-            WHERE user_id = %s
-              AND promo_credits > 0
-            RETURNING promo_credits
-        """, (user_id,)).fetchone()
-
-        if not row:
-            return None
-
-        return row[0]
-
-
-# =========================================================
-# КЛАВИАТУРЫ
-# =========================================================
-
-def main_keyboard():
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-
-    keyboard.row(
-        "🔮 Карта дня",
-        "❓ Вопрос дня",
-    )
-
-    keyboard.row(
-        "✨ Сделать расклад",
-        "ℹ️ О боте",
-    )
-
-    keyboard.row("🔔 Напоминания")
-
-    return keyboard
-
-
-def readings_keyboard():
-    keyboard = types.InlineKeyboardMarkup()
-
-    keyboard.add(
-        types.InlineKeyboardButton(
-            "💕 Любовь",
-            callback_data="reading_love",
-        ),
-        types.InlineKeyboardButton(
-            "💰 Деньги",
-            callback_data="reading_money",
-        ),
-    )
-
-    keyboard.add(
-        types.InlineKeyboardButton(
-            "🔮 3 карты",
-            callback_data="reading_three",
-        )
-    )
-
-    return keyboard
-
-
-def topics_keyboard(kind):
-    keyboard = types.InlineKeyboardMarkup(row_width=1)
-
-    for topic_key, topic_title in TOPICS[kind].items():
-        keyboard.add(
-            types.InlineKeyboardButton(
-                topic_title,
-                callback_data=f"topic:{kind}:{topic_key}",
-            )
-        )
-
-    keyboard.add(
-        types.InlineKeyboardButton(
-            "❌ Отменить",
-            callback_data="reading_cancel",
-        )
-    )
-
-    return keyboard
-
-
-def periods_keyboard():
-    keyboard = types.InlineKeyboardMarkup(row_width=1)
-
-    for period_key, period_title in PERIODS.items():
-        keyboard.add(
-            types.InlineKeyboardButton(
-                period_title,
-                callback_data=f"period:{period_key}",
-            )
-        )
-
-    keyboard.add(
-        types.InlineKeyboardButton(
-            "⬅️ Назад к теме",
-            callback_data="reading_back_topic",
         )
     )
 
@@ -1144,73 +902,59 @@ def personalized_focus(kind, topic):
                 "В этом раскладе мы смотрим именно на текущую динамику отношений: "
                 "что формирует ситуацию сейчас, что особенно важно заметить "
                 "и в каком направлении она может развиваться.",
-
             "feelings":
                 "Этот расклад посвящён теме чувств человека. "
                 "Карты не могут достоверно читать чужие мысли, поэтому здесь "
                 "мы рассматриваем эмоциональную динамику, проявления, взаимность "
                 "и реальные сигналы в общении.",
-
             "ex":
                 "Этот расклад рассматривает историю с бывшим партнёром: "
                 "что из прошлого всё ещё влияет на ситуацию, что происходит сейчас "
                 "и что может быть важно переосмыслить.",
-
             "new":
                 "Этот расклад посвящён новому знакомству: его атмосфере, "
                 "возможной динамике сближения и тому, на что стоит обратить внимание.",
-
             "future":
                 "Этот расклад рассматривает возможное направление отношений. "
                 "Это не фиксированное предсказание: развитие зависит от обстоятельств "
                 "и действий обоих людей.",
         },
-
         "money": {
             "work":
                 "Этот расклад посвящён работе: текущему положению, "
                 "возможностям движения вперёд и фактору, который особенно важно учитывать.",
-
             "income":
                 "Этот расклад рассматривает тему дохода: что влияет на него сейчас, "
                 "где может находиться возможность и что требует особого внимания.",
-
             "situation":
                 "Этот расклад посвящён общей финансовой ситуации: "
                 "её текущей динамике, возможному ресурсу и важному фактору.",
-
             "opportunity":
                 "Этот расклад рассматривает новую финансовую или рабочую возможность. "
                 "Символический взгляд карт полезно сопоставлять с реальными цифрами "
                 "и оценкой рисков.",
-
             "future":
                 "Этот расклад рассматривает возможное направление финансовой ситуации. "
                 "Он не обещает гарантированный доход или убыток, а предлагает "
                 "дополнительный ракурс для размышления.",
         },
-
         "three": {
             "general":
                 "Этот расклад рассматривает ситуацию в целом: "
                 "какой прошлый опыт на неё влияет, что важно сейчас "
                 "и какое направление может сформироваться дальше.",
-
             "love":
                 "Эти три карты рассматриваются через тему личной жизни: "
                 "прошлый эмоциональный контекст, настоящее положение "
                 "и возможное развитие.",
-
             "money":
                 "Эти три карты рассматриваются через тему денег и работы: "
                 "предыдущие обстоятельства, текущее положение "
                 "и возможное дальнейшее направление.",
-
             "decision":
                 "Этот расклад посвящён важному решению. "
                 "Карты не выбирают вместо тебя, а помогают посмотреть "
                 "на контекст, важные факторы и возможные последствия.",
-
             "future":
                 "Этот расклад посвящён ближайшему будущему. "
                 "Карты показывают символическое направление при текущих обстоятельствах, "
@@ -1218,7 +962,9 @@ def personalized_focus(kind, topic):
         },
     }
 
-    return focuses.get(kind, {}).get(
+    return focuses.get(
+        kind, {}
+    ).get(
         topic,
         "Посмотри на карты как на дополнительный символический ракурс ситуации.",
     )
@@ -1230,7 +976,6 @@ def personalized_focus(kind, topic):
 
 def build_ai_prompt(kind, topic, period, chosen, user_id):
     name, age, other_name, other_age, _ = get_profile(user_id)
-
     positions = reading_positions(kind, topic)
 
     cards_text = "\n".join(
@@ -1256,38 +1001,26 @@ def build_ai_prompt(kind, topic, period, chosen, user_id):
     text += (
         "\nВАЖНЫЕ ПРАВИЛА:\n"
         "1. Обращайся к пользователю по имени, но никогда не угадывай пол по имени. "
-        "Если пол явно не указан, используй только нейтральные по роду формулировки. "
-        "Не используй обращения и формы вроде «дорогой/дорогая», "
-        "«готов/готова», «нашёл/нашла», «мужчина/женщина».\n"
-        "2. Не придумывай факты и конкретные события из жизни пользователя. "
-        "Не утверждай, что человек обязательно сменит работу, встретит партнёра, "
-        "расстанется, получит деньги или столкнётся с определённым событием.\n"
+        "Если пол явно не указан, используй только нейтральные по роду формулировки.\n"
+        "2. Не придумывай факты и конкретные события из жизни пользователя.\n"
         "3. Не утверждай, что карты читают мысли другого человека или точно знают будущее.\n"
-        "4. Пиши красиво и атмосферно, но естественным современным русским языком. "
-        "Избегай чрезмерного пафоса, бессмысленных метафор и театральных вступлений.\n"
-        "5. Не начинай текст со слов «дорогой», «дорогая», «позвольте» "
-        "или длинного мистического вступления. Сразу переходи к раскладу.\n"
-        "6. Каждая карта должна интерпретироваться именно в своей позиции, "
-        "с учётом выбранной темы и периода.\n"
-        "7. Избегай повторов. Не повторяй одну мысль разными словами.\n"
+        "4. Пиши красиво и атмосферно, но естественным современным русским языком.\n"
+        "5. Не используй чрезмерный пафос и странные метафоры.\n"
+        "6. Каждая карта должна интерпретироваться именно в своей позиции.\n"
+        "7. Избегай повторов.\n"
         "8. Не выдавай медицинские, юридические или финансовые советы.\n"
-        "9. Не называй символическую интерпретацию установленным фактом.\n\n"
-
+        "9. Не называй символическую интерпретацию установленным фактом.\n"
+        "10. Весь ответ должен быть короче 3500 символов.\n\n"
         "СТРУКТУРА ОТВЕТА:\n"
-        f"Первая строка: {SPREADS[kind][0]}\n"
-        f"Затем: 🎯 Тема: {topic_name(kind, topic)}\n"
-        f"Затем: ⏳ Период: {period_name(period)}\n\n"
-        "Далее разбери три карты по очереди. "
-        "Для каждой укажи номер, позицию и название карты, "
-        "а затем дай содержательную интерпретацию в 1–2 небольших абзацах.\n\n"
-        "После карт добавь раздел «🔗 Как карты связаны» и объясни, "
-        "как три карты образуют единую последовательность применительно к теме расклада.\n\n"
-        "Затем добавь «🔮 Общий итог». Сделай ясный, полезный и осторожный вывод "
-        "для выбранной темы и периода, не превращая его в гарантированное предсказание.\n\n"
-        "В самом конце добавь «💭 Над чем подумать» и один конкретный вопрос "
-        "для самостоятельного размышления.\n\n"
-        "Будущее описывай только как возможное направление. "
-        "Подчеркни, что решения и обстоятельства могут изменить развитие ситуации."
+        f"{SPREADS[kind][0]}\n"
+        f"🎯 Тема: {topic_name(kind, topic)}\n"
+        f"⏳ Период: {period_name(period)}\n\n"
+        "Разбери три карты по очереди: номер, позиция, название карты "
+        "и короткая содержательная интерпретация.\n\n"
+        "После карт добавь «🔗 Как карты связаны».\n"
+        "Затем добавь «🔮 Общий итог».\n"
+        "В конце добавь «💭 Над чем подумать» и один конкретный вопрос.\n\n"
+        "Будущее описывай только как возможное направление."
     )
 
     return text
@@ -1311,14 +1044,12 @@ def ai_tarot_reading(kind, topic, period, chosen, user_id):
                         "role": "system",
                         "content": (
                             "Ты — Таро Оракул в Telegram-боте. "
-                            "Создавай качественные персонализированные расклады Таро "
-                            "на русском языке. Стиль спокойный, атмосферный, понятный "
-                            "и естественный. Не используй театральный пафос и странные "
-                            "метафоры. Не придумывай события из жизни пользователя. "
-                            "Не выдавай символическую интерпретацию за достоверное "
-                            "предсказание. Если пол пользователя явно не указан, "
-                            "всегда используй нейтральные по грамматическому роду "
-                            "формулировки. Строго соблюдай структуру и правила запроса."
+                            "Создавай персонализированные расклады Таро на русском языке. "
+                            "Стиль спокойный, атмосферный, понятный и естественный. "
+                            "Не придумывай события из жизни пользователя. "
+                            "Не выдавай символическую интерпретацию за точное предсказание. "
+                            "Если пол пользователя явно не указан, используй "
+                            "нейтральные по грамматическому роду формулировки."
                         ),
                     },
                     {
@@ -1333,7 +1064,7 @@ def ai_tarot_reading(kind, topic, period, chosen, user_id):
                     },
                 ],
                 "temperature": 0.8,
-                "max_tokens": 1800,
+                "max_tokens": 1000,
             },
             timeout=30,
         )
@@ -1349,13 +1080,11 @@ def ai_tarot_reading(kind, topic, period, chosen, user_id):
         return content.strip()
 
     except Exception as exc:
-        print(
-            "Ошибка OpenRouter:",
-            repr(exc),
-            flush=True,
-        )
+        print("Ошибка OpenRouter:", repr(exc), flush=True)
         return None
-        def spread(kind, topic=None, period=None, user_id=None):
+
+
+def spread(kind, topic=None, period=None, user_id=None):
     title = SPREADS[kind][0]
 
     if topic not in TOPICS.get(kind, {}):
@@ -1365,7 +1094,6 @@ def ai_tarot_reading(kind, topic, period, chosen, user_id):
         period = "none"
 
     positions = reading_positions(kind, topic)
-
     chosen = random.sample(CARDS, 3)
 
     ai_result = ai_tarot_reading(
@@ -1399,15 +1127,9 @@ def ai_tarot_reading(kind, topic, period, chosen, user_id):
         name, age, other_name, other_age, _ = get_profile(user_id)
 
         if name and age:
-            profile_lines.append(
-                f"👤 Для: {name}, {age}"
-            )
+            profile_lines.append(f"👤 Для: {name}, {age}")
 
-        if (
-            needs_other_person(kind, topic)
-            and other_name
-            and other_age
-        ):
+        if needs_other_person(kind, topic) and other_name and other_age:
             profile_lines.append(
                 f"💕 Второй человек: {other_name}, {other_age}"
             )
@@ -1432,83 +1154,35 @@ def ai_tarot_reading(kind, topic, period, chosen, user_id):
     ])
 
     for number, position, card in zip(NUMBERS, positions, chosen):
-        name = card[0]
+        card_name = card[0]
         meaning = card[meaning_index]
 
         lines.append(
             f"{number} {position}\n\n"
-            f"{name}\n\n"
+            f"{card_name}\n\n"
             f"{meaning}"
         )
 
     names = [card[0] for card in chosen]
 
-    if kind == "love":
-        connection = (
-            "🔗 Как карты связаны\n\n"
-            f"Связка {names[0]} → {names[1]} → {names[2]} "
-            f"рассматривается через тему «{selected_topic}».\n\n"
-            "Первая карта задаёт основу ситуации, "
-            "вторая показывает наиболее важную динамику настоящего, "
-            "а третья — возможное направление развития.\n\n"
-            "Символику карт полезно сопоставлять с реальными поступками, "
-            "общением, взаимностью и личными границами."
-        )
+    connection = (
+        "🔗 Как карты связаны\n\n"
+        f"Связка {names[0]} → {names[1]} → {names[2]} "
+        f"рассматривается через тему «{selected_topic}».\n\n"
+        "Первая карта показывает исходный контекст, "
+        "вторая — ключевую динамику настоящего, "
+        "а третья — одно из возможных направлений развития."
+    )
 
-        conclusion = (
-            "🔮 Общий итог\n\n"
-            f"Период: {selected_period}.\n\n"
-            "Расклад показывает направление для размышления, "
-            "а не неизбежный сценарий отношений.\n\n"
-            "💭 Над чем подумать\n"
-            "Что в этой ситуации подтверждается реальными поступками, "
-            "а что пока остаётся ожиданием или предположением?"
-        )
-
-    elif kind == "money":
-        connection = (
-            "🔗 Как карты связаны\n\n"
-            f"Связка {names[0]} → {names[1]} → {names[2]} "
-            f"рассматривается через тему «{selected_topic}».\n\n"
-            "Первая карта показывает основу ситуации, "
-            "вторая — возможный ресурс или направление, "
-            "третья — фактор, который особенно важно учитывать.\n\n"
-            "Символику карт стоит сопоставлять с реальными цифрами, "
-            "условиями и доступными ресурсами."
-        )
-
-        conclusion = (
-            "🔮 Общий итог\n\n"
-            f"Период: {selected_period}.\n\n"
-            "Расклад предлагает дополнительный взгляд на ситуацию, "
-            "но реальные финансовые решения лучше принимать "
-            "на основе проверяемой информации и оценки рисков.\n\n"
-            "💭 Над чем подумать\n"
-            "Какой один конкретный и разумный шаг можно сделать "
-            "в выбранной теме уже сейчас?\n\n"
-            "⚠️ Это развлекательная символическая интерпретация, "
-            "а не финансовая рекомендация."
-        )
-
-    else:
-        connection = (
-            "🔗 Как карты связаны\n\n"
-            f"Связка {names[0]} → {names[1]} → {names[2]} "
-            f"рассматривается через тему «{selected_topic}».\n\n"
-            "Карты образуют последовательность: "
-            "от контекста ситуации к настоящему "
-            "и затем к одному из возможных направлений развития."
-        )
-
-        conclusion = (
-            "🔮 Общий итог\n\n"
-            f"Период: {selected_period}.\n\n"
-            "Будущее не зафиксировано заранее: решения, обстоятельства "
-            "и действия людей способны менять дальнейшее развитие ситуации.\n\n"
-            "💭 Над чем подумать\n"
-            "Что из прошлого уже нельзя изменить, "
-            "но на что ты всё ещё можешь повлиять сейчас?"
-        )
+    conclusion = (
+        "🔮 Общий итог\n\n"
+        f"Период: {selected_period}.\n\n"
+        "Расклад показывает символическое направление для размышления, "
+        "а не неизбежный сценарий. Решения и обстоятельства "
+        "могут менять дальнейшее развитие ситуации.\n\n"
+        "💭 Над чем подумать\n"
+        "Какой один конкретный шаг сейчас находится под твоим контролем?"
+    )
 
     lines.append(connection)
     lines.append(conclusion)
@@ -1555,6 +1229,162 @@ def answer(call, text=None):
 
 
 # =========================================================
+# АНКЕТА — ЛОГИКА
+# =========================================================
+
+def begin_profile(chat_id, user_id):
+    name, age, _, _, _ = get_profile(user_id)
+
+    if name and age:
+        set_form_step(user_id, "profile_confirm")
+
+        bot.send_message(
+            chat_id,
+            "👤 Для персонализации расклада у меня сохранены данные:\n\n"
+            f"Имя: {name}\n"
+            f"Возраст: {age}\n\n"
+            "Использовать их?",
+            reply_markup=profile_keyboard(),
+        )
+        return
+
+    set_form_step(user_id, "name")
+
+    bot.send_message(
+        chat_id,
+        "👤 Перед раскладом немного персонализируем его.\n\n"
+        "Как тебя зовут?\n\n"
+        "Напиши только имя.",
+    )
+
+
+def continue_after_main_profile(chat_id, user_id):
+    kind, topic, period = get_pending_reading(user_id)
+
+    if not valid_reading_params(kind, topic, period):
+        clear_pending_reading(user_id)
+        bot.send_message(
+            chat_id,
+            "Параметры расклада потеряны.\n\nНачни расклад заново.",
+            reply_markup=main_keyboard(),
+        )
+        return
+
+    if needs_other_person(kind, topic):
+        _, _, other_name, other_age, _ = get_profile(user_id)
+
+        if other_name and other_age:
+            set_form_step(user_id, "other_confirm")
+
+            bot.send_message(
+                chat_id,
+                "💕 Для этого любовного расклада у меня сохранены данные второго человека:\n\n"
+                f"Имя: {other_name}\n"
+                f"Возраст: {other_age}\n\n"
+                "Использовать их?",
+                reply_markup=other_profile_keyboard(),
+            )
+            return
+
+        set_form_step(user_id, "other_name")
+
+        bot.send_message(
+            chat_id,
+            "💕 Теперь укажи имя человека, о котором этот расклад.\n\n"
+            "Напиши только имя.",
+        )
+        return
+
+    finish_profile_and_process(chat_id, user_id)
+
+
+def finish_profile_and_process(chat_id, user_id):
+    set_form_step(user_id, None)
+    kind, topic, period = get_pending_reading(user_id)
+
+    if not valid_reading_params(kind, topic, period):
+        clear_pending_reading(user_id)
+        bot.send_message(
+            chat_id,
+            "Параметры расклада потеряны.\n\nНачни расклад заново.",
+            reply_markup=main_keyboard(),
+        )
+        return
+
+    process_selected_reading(
+        chat_id,
+        user_id,
+        kind,
+        topic,
+        period,
+    )
+
+
+# =========================================================
+# ПРОМО
+# =========================================================
+
+def activate_promo(user_id, code):
+    normalized_code = code.strip().upper()
+
+    if normalized_code != PROMO_CODE:
+        return "invalid", 0
+
+    with db() as conn:
+        row = conn.execute("""
+            INSERT INTO users (
+                user_id, promo_code, promo_credits, created_at, last_seen
+            )
+            VALUES (%s, %s, %s, now(), now())
+
+            ON CONFLICT (user_id)
+            DO UPDATE SET
+                promo_code = EXCLUDED.promo_code,
+                promo_credits = EXCLUDED.promo_credits,
+                last_seen = now(),
+                reminder_sent_at = NULL
+            WHERE users.promo_code IS NULL
+
+            RETURNING promo_credits
+        """, (
+            user_id,
+            PROMO_CODE,
+            PROMO_CREDITS,
+        )).fetchone()
+
+        if row:
+            return "activated", row[0]
+
+        current = conn.execute("""
+            UPDATE users
+            SET last_seen = now(), reminder_sent_at = NULL
+            WHERE user_id = %s
+            RETURNING promo_credits
+        """, (user_id,)).fetchone()
+
+        return "already", current[0] if current else 0
+
+
+def claim_promo_credit(user_id):
+    with db() as conn:
+        row = conn.execute("""
+            UPDATE users
+            SET
+                promo_credits = promo_credits - 1,
+                last_seen = now(),
+                reminder_sent_at = NULL
+            WHERE user_id = %s
+              AND promo_credits > 0
+            RETURNING promo_credits
+        """, (user_id,)).fetchone()
+
+        if not row:
+            return None
+
+        return row[0]
+
+
+# =========================================================
 # НАПОМИНАНИЯ
 # =========================================================
 
@@ -1578,9 +1408,7 @@ def set_reminders_enabled(user_id, enabled):
     with db() as conn:
         conn.execute("""
             UPDATE users
-            SET
-                reminders_enabled = %s,
-                reminder_sent_at = NULL
+            SET reminders_enabled = %s, reminder_sent_at = NULL
             WHERE user_id = %s
         """, (enabled, user_id))
 
@@ -1622,45 +1450,28 @@ def send_inactivity_reminders():
                 bot.send_message(
                     user_id,
                     "🔮 Заглянем в карты?\n\n"
-                    "Твоя бесплатная Карта дня ждёт тебя ✨\n\n"
-                    "Если захочешь — открой её одним нажатием.",
+                    "Твоя бесплатная Карта дня ждёт тебя ✨",
                     reply_markup=reminder_message_keyboard(),
                 )
-
             except Exception:
-                try:
-                    with db() as conn:
-                        conn.execute("""
-                            UPDATE users
-                            SET reminders_enabled = FALSE
-                            WHERE user_id = %s
-                        """, (user_id,))
-                except Exception:
-                    pass
+                with db() as conn:
+                    conn.execute("""
+                        UPDATE users
+                        SET reminders_enabled = FALSE
+                        WHERE user_id = %s
+                    """, (user_id,))
 
             time.sleep(0.2)
 
     except Exception as exc:
-        print(
-            "Ошибка проверки напоминаний:",
-            repr(exc),
-            flush=True,
-        )
+        print("Ошибка проверки напоминаний:", repr(exc), flush=True)
 
 
 def reminder_worker():
     time.sleep(15)
 
     while True:
-        try:
-            send_inactivity_reminders()
-        except Exception as exc:
-            print(
-                "Ошибка reminder_worker:",
-                repr(exc),
-                flush=True,
-            )
-
+        send_inactivity_reminders()
         time.sleep(REMINDER_CHECK_SECONDS)
 
 
@@ -1670,11 +1481,7 @@ def reminder_worker():
 
 def make_invoice_payload(kind, topic, period, user_id):
     return (
-        f"{kind}:"
-        f"{topic}:"
-        f"{period}:"
-        f"{user_id}:"
-        f"{uuid4().hex}"
+        f"{kind}:{topic}:{period}:{user_id}:{uuid4().hex}"
     )
 
 
@@ -1699,7 +1506,7 @@ def invoice_details(payload, user_id):
 
 
 # =========================================================
-# /START
+# START
 # =========================================================
 
 @bot.message_handler(commands=["start"])
@@ -1733,8 +1540,6 @@ def start(message):
         f"💕 Любовь — {PRICE} ⭐\n"
         f"💰 Деньги — {PRICE} ⭐\n"
         f"🔮 Следующие расклады «3 карты» — {PRICE} ⭐\n\n"
-        "Перед раскладом ты сможешь выбрать тему, период "
-        "и указать данные для персонализации.\n\n"
         "Выбери, с чего хочешь начать 👇",
         reply_markup=main_keyboard(),
     )
@@ -1750,448 +1555,7 @@ def myid(message):
 
 
 # =========================================================
-# НАПОМИНАНИЯ — HANDLERS
-# =========================================================
-
-@bot.message_handler(func=lambda m: m.text == "🔔 Напоминания")
-def reminders_settings(message):
-    touch_user(message.from_user.id)
-    enabled = get_reminders_enabled(message.from_user.id)
-
-    if enabled:
-        text = (
-            "🔔 Напоминания включены.\n\n"
-            f"Если ты не заходишь в бот {REMINDER_AFTER_DAYS} дня, "
-            "я могу один раз мягко напомнить о Карте дня.\n\n"
-            "Каждый день писать не буду 🙂"
-        )
-    else:
-        text = (
-            "🔕 Напоминания выключены.\n\n"
-            "Бот не будет сам присылать сообщения.\n\n"
-            "Ты можешь включить их снова в любой момент."
-        )
-
-    bot.send_message(
-        message.chat.id,
-        text,
-        reply_markup=reminder_settings_keyboard(enabled),
-    )
-
-
-@bot.callback_query_handler(func=lambda c: c.data == "reminders_off")
-def reminders_off(call):
-    set_reminders_enabled(call.from_user.id, False)
-    answer(call, "Напоминания выключены")
-
-    bot.send_message(
-        call.message.chat.id,
-        "🔕 Готово. Напоминания выключены.\n\n"
-        "Бот больше не будет сам присылать такие сообщения.",
-        reply_markup=main_keyboard(),
-    )
-
-
-@bot.callback_query_handler(func=lambda c: c.data == "reminders_on")
-def reminders_on(call):
-    set_reminders_enabled(call.from_user.id, True)
-    answer(call, "Напоминания включены")
-
-    bot.send_message(
-        call.message.chat.id,
-        "🔔 Напоминания включены.\n\n"
-        f"Если тебя не будет {REMINDER_AFTER_DAYS} дня, "
-        "бот сможет один раз мягко напомнить о Карте дня.",
-        reply_markup=main_keyboard(),
-    )
-
-
-@bot.callback_query_handler(func=lambda c: c.data == "reminder_get_card")
-def reminder_get_card(call):
-    touch_user(call.from_user.id)
-    answer(call)
-
-    if not claim_free(call.from_user.id, "daily_card"):
-        bot.send_message(
-            call.message.chat.id,
-            "🔮 Ты уже получил карту дня сегодня.\n\n"
-            "Возвращайся завтра ✨",
-            reply_markup=main_keyboard(),
-        )
-        return
-
-    bot.send_message(
-        call.message.chat.id,
-        day_card_text(),
-        reply_markup=main_keyboard(),
-    )
-
-
-# =========================================================
-# ПРОМО
-# =========================================================
-
-@bot.message_handler(commands=["promo"])
-def promo(message):
-    parts = message.text.split(maxsplit=1)
-
-    if len(parts) < 2:
-        touch_user(message.from_user.id)
-        bot.send_message(
-            message.chat.id,
-            "🎁 Чтобы активировать промокод, введи:\n\n"
-            "/promo КОД",
-        )
-        return
-
-    status, credits = activate_promo(message.from_user.id, parts[1])
-
-    if status == "invalid":
-        touch_user(message.from_user.id)
-        bot.send_message(message.chat.id, "❌ Такой промокод не найден.")
-        return
-
-    if status == "already":
-        bot.send_message(
-            message.chat.id,
-            "🎁 Промокод на этом аккаунте уже был активирован.\n\n"
-            f"Осталось бесплатных раскладов: {credits}.",
-        )
-        return
-
-    bot.send_message(
-        message.chat.id,
-        "🎉 Промокод активирован!\n\n"
-        f"Тебе доступно {credits} бесплатных расклада.\n\n"
-        "Их можно использовать на:\n"
-        "💕 Любовь\n"
-        "💰 Деньги\n"
-        "🔮 3 карты\n\n"
-        "Выбирай расклад через обычное меню 👇",
-        reply_markup=main_keyboard(),
-    )
-
-
-# =========================================================
-# ТЕСТ ВЛАДЕЛЬЦА
-# =========================================================
-
-@bot.message_handler(commands=["testreading"])
-def testreading(message):
-    if not OWNER_ID or message.from_user.id != OWNER_ID:
-        return
-
-    touch_user(message.from_user.id)
-    parts = message.text.split(maxsplit=1)
-
-    if len(parts) < 2 or parts[1].strip().lower() not in SPREADS:
-        bot.send_message(
-            message.chat.id,
-            "🧪 Тестовые расклады:\n\n"
-            "/testreading love\n"
-            "/testreading money\n"
-            "/testreading three",
-        )
-        return
-
-    kind = parts[1].strip().lower()
-    test_topic = next(iter(TOPICS[kind]))
-
-    bot.send_message(
-        message.chat.id,
-        "🧪 Тестовый режим владельца.\n"
-        "Stars не списываются.",
-    )
-
-    bot.send_message(
-        message.chat.id,
-        spread(kind, test_topic, "near", message.from_user.id),
-    )
-
-
-# =========================================================
-# СТАТИСТИКА
-# =========================================================
-
-@bot.message_handler(commands=["stats"])
-def stats(message):
-    if not OWNER_ID or message.from_user.id != OWNER_ID:
-        return
-
-    touch_user(message.from_user.id)
-    now_local = datetime.now(TZ)
-
-    today_start = now_local.replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-    tomorrow_start = today_start + timedelta(days=1)
-    today = now_local.date()
-
-    try:
-        with db() as conn:
-            total_users = conn.execute(
-                "SELECT COUNT(*) FROM users"
-            ).fetchone()[0]
-
-            new_today = conn.execute("""
-                SELECT COUNT(*) FROM users
-                WHERE created_at >= %s AND created_at < %s
-            """, (today_start, tomorrow_start)).fetchone()[0]
-
-            active_today = conn.execute("""
-                SELECT COUNT(*) FROM users
-                WHERE last_seen >= %s AND last_seen < %s
-            """, (today_start, tomorrow_start)).fetchone()[0]
-
-            card_today = conn.execute("""
-                SELECT COUNT(*) FROM users WHERE daily_card = %s
-            """, (today,)).fetchone()[0]
-
-            question_today = conn.execute("""
-                SELECT COUNT(*) FROM users WHERE daily_question = %s
-            """, (today,)).fetchone()[0]
-
-            free_three = conn.execute("""
-                SELECT COUNT(*) FROM users WHERE three_used = TRUE
-            """).fetchone()[0]
-
-            promo_users = conn.execute("""
-                SELECT COUNT(*) FROM users WHERE promo_code IS NOT NULL
-            """).fetchone()[0]
-
-            promo_credits_left = conn.execute("""
-                SELECT COALESCE(SUM(promo_credits), 0) FROM users
-            """).fetchone()[0]
-
-            successful_payments = conn.execute("""
-                SELECT COUNT(*) FROM payments
-            """).fetchone()[0]
-
-            delivered_payments = conn.execute("""
-                SELECT COUNT(*) FROM payments WHERE delivered = TRUE
-            """).fetchone()[0]
-
-            stars_received = conn.execute("""
-                SELECT COALESCE(SUM(amount), 0) FROM payments
-            """).fetchone()[0]
-
-            reminders_on_count = conn.execute("""
-                SELECT COUNT(*) FROM users WHERE reminders_enabled = TRUE
-            """).fetchone()[0]
-
-            reminders_sent_count = conn.execute("""
-                SELECT COUNT(*) FROM users
-                WHERE reminder_sent_at IS NOT NULL
-            """).fetchone()[0]
-
-            support_count = conn.execute("""
-                SELECT COUNT(*) FROM support_tickets
-            """).fetchone()[0]
-
-            profiles_count = conn.execute("""
-                SELECT COUNT(*) FROM users
-                WHERE profile_name IS NOT NULL
-                  AND profile_age IS NOT NULL
-            """).fetchone()[0]
-
-        bot.send_message(
-            message.chat.id,
-            "📊 Статистика Таро Оракул\n\n"
-            "👥 Пользователи:\n"
-            f"Всего: {total_users}\n"
-            f"🆕 Новых сегодня: {new_today}\n"
-            f"🟢 Активных сегодня: {active_today}\n"
-            f"👤 Заполнили анкету: {profiles_count}\n\n"
-            "📅 Использование сегодня:\n"
-            f"🔮 Карта дня: {card_today}\n"
-            f"❓ Вопрос дня: {question_today}\n\n"
-            "🎁 Бесплатные функции:\n"
-            f"🔮 Первый расклад «3 карты»: {free_three}\n"
-            f"🎟 Активировали промокод: {promo_users}\n"
-            f"🎁 Осталось промо-раскладов: {promo_credits_left}\n\n"
-            "💳 Оплата:\n"
-            f"✅ Успешных платежей: {successful_payments}\n"
-            f"📨 Выдано платных раскладов: {delivered_payments}\n"
-            f"⭐ Получено Stars: {stars_received}\n\n"
-            "🔔 Напоминания:\n"
-            f"Включены у пользователей: {reminders_on_count}\n"
-            f"Сейчас отправлено и ожидает возвращения: {reminders_sent_count}\n\n"
-            "🛟 Поддержка:\n"
-            f"📩 Всего обращений: {support_count}"
-        )
-
-    except Exception:
-        bot.send_message(
-            message.chat.id,
-            "❌ Не удалось получить статистику.",
-        )
-
-
-# =========================================================
-# УСЛОВИЯ
-# =========================================================
-
-@bot.message_handler(commands=["terms"])
-def terms(message):
-    touch_user(message.from_user.id)
-
-    bot.send_message(
-        message.chat.id,
-        "📖 Условия Таро Оракул\n\n"
-        "Бесплатно:\n"
-        "• Карта дня — один раз в день.\n"
-        "• Вопрос дня — один раз в день.\n"
-        "• Первый расклад «3 карты» — один раз на аккаунт.\n\n"
-        "Платно:\n"
-        f"• Любовь — {PRICE} Stars.\n"
-        f"• Деньги — {PRICE} Stars.\n"
-        f"• Последующие «3 карты» — {PRICE} Stars.\n\n"
-        "Перед раскладом можно выбрать тему и период, "
-        "а также указать имя и возраст для персонализации.\n\n"
-        "Платный результат приходит автоматически "
-        "после успешного подтверждения оплаты Telegram.\n\n"
-        "Все расклады являются символической развлекательной "
-        "интерпретацией и не являются точным предсказанием, "
-        "медицинской, финансовой или юридической консультацией.\n\n"
-        "🔔 Напоминания можно отключить через кнопку "
-        "«🔔 Напоминания» в меню.\n\n"
-        "Проблема с оплатой или результатом: /paysupport."
-    )
-
-
-# =========================================================
-# ПОДДЕРЖКА
-# =========================================================
-
-@bot.message_handler(commands=["support", "paysupport"])
-def support(message):
-    touch_user(message.from_user.id)
-    clear_pending_reading(message.from_user.id)
-
-    with db() as conn:
-        conn.execute("""
-            INSERT INTO users (
-                user_id,
-                support_pending,
-                created_at,
-                last_seen
-            )
-            VALUES (%s, TRUE, now(), now())
-
-            ON CONFLICT (user_id)
-            DO UPDATE SET
-                support_pending = TRUE,
-                last_seen = now(),
-                reminder_sent_at = NULL
-        """, (message.from_user.id,))
-
-    bot.send_message(
-        message.chat.id,
-        "🛟 Опиши проблему одним сообщением.\n\n"
-        "Не присылай пароль, токен или данные банковской карты.",
-    )
-
-
-@bot.message_handler(commands=["supportlist"])
-def support_list(message):
-    if not OWNER_ID or message.from_user.id != OWNER_ID:
-        return
-
-    touch_user(message.from_user.id)
-
-    try:
-        with db() as conn:
-            rows = conn.execute("""
-                SELECT id, user_id, body, created_at
-                FROM support_tickets
-                ORDER BY id DESC
-                LIMIT 10
-            """).fetchall()
-
-        if not rows:
-            bot.send_message(
-                message.chat.id,
-                "🛟 Обращений в поддержку пока нет.",
-            )
-            return
-
-        bot.send_message(
-            message.chat.id,
-            "🛟 Последние обращения в поддержку\n\n"
-            "Показываю последние 10 обращений:",
-        )
-
-        for ticket_id, user_id, body, created_at in rows:
-            if created_at:
-                try:
-                    created_local = created_at.astimezone(TZ)
-                    created_text = created_local.strftime("%d.%m.%Y %H:%M")
-                except Exception:
-                    created_text = str(created_at)
-            else:
-                created_text = "Неизвестно"
-
-            bot.send_message(
-                message.chat.id,
-                f"🎫 Обращение №{ticket_id}\n\n"
-                f"👤 Telegram ID: {user_id}\n"
-                f"🕐 {created_text}\n\n"
-                f"💬 Сообщение:\n{body}\n\n"
-                f"↩️ Ответить:\n"
-                f"/reply {ticket_id} текст",
-            )
-
-    except Exception as exc:
-        print("Ошибка /supportlist:", repr(exc), flush=True)
-        bot.send_message(
-            message.chat.id,
-            "❌ Не удалось загрузить обращения.",
-        )
-
-
-@bot.message_handler(commands=["reply"])
-def reply_to_ticket(message):
-    if not OWNER_ID or message.from_user.id != OWNER_ID:
-        return
-
-    touch_user(message.from_user.id)
-    parts = message.text.split(maxsplit=2)
-
-    if len(parts) < 3 or not parts[1].isdigit():
-        bot.send_message(
-            message.chat.id,
-            "Формат:\n/reply НОМЕР_ОБРАЩЕНИЯ ответ",
-        )
-        return
-
-    ticket_id = int(parts[1])
-
-    with db() as conn:
-        row = conn.execute("""
-            SELECT user_id FROM support_tickets WHERE id = %s
-        """, (ticket_id,)).fetchone()
-
-    if not row:
-        bot.send_message(message.chat.id, "Обращение не найдено.")
-        return
-
-    try:
-        bot.send_message(
-            row[0],
-            f"🛟 Ответ поддержки по обращению №{ticket_id}:\n\n"
-            f"{parts[2]}",
-        )
-        bot.send_message(message.chat.id, "✅ Ответ отправлен.")
-
-    except Exception:
-        bot.send_message(
-            message.chat.id,
-            "❌ Не удалось отправить ответ пользователю.",
-        )
-
-
-# =========================================================
-# КАРТА И ВОПРОС ДНЯ
+# ОСНОВНЫЕ КНОПКИ
 # =========================================================
 
 @bot.message_handler(func=lambda m: m.text == "🔮 Карта дня")
@@ -2201,8 +1565,7 @@ def card_of_the_day(message):
     if not claim_free(message.from_user.id, "daily_card"):
         bot.send_message(
             message.chat.id,
-            "🔮 Ты уже получил карту дня сегодня.\n\n"
-            "Возвращайся завтра ✨",
+            "🔮 Ты уже получил карту дня сегодня.\n\nВозвращайся завтра ✨",
         )
         return
 
@@ -2216,17 +1579,12 @@ def question_of_the_day(message):
     if not claim_free(message.from_user.id, "daily_question"):
         bot.send_message(
             message.chat.id,
-            "❓ Ты уже получил Вопрос дня сегодня.\n\n"
-            "Возвращайся завтра ✨",
+            "❓ Ты уже получил Вопрос дня сегодня.\n\nВозвращайся завтра ✨",
         )
         return
 
     bot.send_message(message.chat.id, question_text())
 
-
-# =========================================================
-# МЕНЮ
-# =========================================================
 
 @bot.message_handler(func=lambda m: m.text == "✨ Сделать расклад")
 def reading(message):
@@ -2236,12 +1594,9 @@ def reading(message):
     bot.send_message(
         message.chat.id,
         "✨ Выбери расклад:\n\n"
-        f"💕 Любовь — подробный расклад из 3 карт · {PRICE} ⭐\n\n"
-        f"💰 Деньги — текущая ситуация, возможность "
-        f"и важный фактор · {PRICE} ⭐\n\n"
-        "🔮 3 карты — прошлое, настоящее и возможное будущее.\n"
-        f"Первый раз бесплатно, затем {PRICE} ⭐.\n\n"
-        "После выбора я уточню тему, период и данные для персонализации.",
+        f"💕 Любовь — {PRICE} ⭐\n"
+        f"💰 Деньги — {PRICE} ⭐\n"
+        f"🔮 3 карты — первый бесплатно, затем {PRICE} ⭐.",
         reply_markup=readings_keyboard(),
     )
 
@@ -2254,13 +1609,9 @@ def about(message):
         message.chat.id,
         "🔮 Таро Оракул\n\n"
         "Развлекательный бот с символическими раскладами Таро.\n\n"
-        "🎯 Перед раскладом можно выбрать тему, период "
-        "и указать данные для персонализации.\n\n"
         "🎁 Карта дня и Вопрос дня — бесплатно каждый день.\n"
         "🔮 Первый расклад «3 карты» — бесплатно.\n"
         f"⭐ Платные расклады — {PRICE} Stars.\n\n"
-        "🔔 Мягкие напоминания можно включить "
-        "или выключить через меню.\n\n"
         "📖 Условия: /terms\n"
         "🛟 Поддержка: /support\n"
         "💳 Проблема с оплатой: /paysupport",
@@ -2293,7 +1644,7 @@ def reading_callback(call):
     bot.send_message(
         call.message.chat.id,
         f"{SPREADS[kind][0]}\n\n"
-        "🎯 Выбери тему, которая ближе всего к твоей ситуации:",
+        "🎯 Выбери тему:",
         reply_markup=topics_keyboard(kind),
     )
 
@@ -2319,11 +1670,6 @@ def topic_callback(call):
 
     if pending_kind != kind:
         answer(call, "Этот выбор уже неактуален")
-        bot.send_message(
-            call.message.chat.id,
-            "Начни новый расклад через кнопку «✨ Сделать расклад».",
-            reply_markup=main_keyboard(),
-        )
         return
 
     set_pending_reading(
@@ -2346,17 +1692,10 @@ def topic_callback(call):
 
 @bot.callback_query_handler(func=lambda c: c.data == "reading_back_topic")
 def back_to_topic(call):
-    touch_user(call.from_user.id)
-
     kind, _, _ = get_pending_reading(call.from_user.id)
 
     if kind not in SPREADS:
         answer(call, "Расклад уже завершён")
-        bot.send_message(
-            call.message.chat.id,
-            "Начни новый расклад через меню.",
-            reply_markup=main_keyboard(),
-        )
         return
 
     set_pending_reading(call.from_user.id, kind=kind)
@@ -2371,44 +1710,25 @@ def back_to_topic(call):
 
 @bot.callback_query_handler(func=lambda c: c.data == "reading_cancel")
 def cancel_reading(call):
-    touch_user(call.from_user.id)
     clear_pending_reading(call.from_user.id)
-
     answer(call, "Расклад отменён")
 
     bot.send_message(
         call.message.chat.id,
-        "❌ Расклад отменён.\n\n"
-        "Ничего не списано.",
+        "❌ Расклад отменён.\n\nНичего не списано.",
         reply_markup=main_keyboard(),
     )
 
-
-# =========================================================
-# ВЫБОР ПЕРИОДА → АНКЕТА
-# =========================================================
 
 @bot.callback_query_handler(
     func=lambda c: c.data and c.data.startswith("period:")
 )
 def period_callback(call):
-    touch_user(call.from_user.id)
-
     period = call.data.removeprefix("period:")
-
-    if period not in PERIODS:
-        answer(call, "Период не найден")
-        return
-
     kind, topic, _ = get_pending_reading(call.from_user.id)
 
     if not valid_reading_params(kind, topic, period):
         answer(call, "Этот выбор уже неактуален")
-        bot.send_message(
-            call.message.chat.id,
-            "Начни новый расклад через кнопку «✨ Сделать расклад».",
-            reply_markup=main_keyboard(),
-        )
         return
 
     set_pending_reading(
@@ -2419,31 +1739,15 @@ def period_callback(call):
     )
 
     answer(call)
-
-    bot.send_message(
-        call.message.chat.id,
-        "✨ Параметры расклада выбраны:\n\n"
-        f"🎯 {topic_name(kind, topic)}\n"
-        f"⏳ {period_name(period)}",
-    )
-
     begin_profile(call.message.chat.id, call.from_user.id)
 
 
 # =========================================================
-# КНОПКИ АНКЕТЫ
+# АНКЕТА CALLBACK
 # =========================================================
 
 @bot.callback_query_handler(func=lambda c: c.data == "profile_use")
 def profile_use(call):
-    touch_user(call.from_user.id)
-
-    _, _, _, _, step = get_profile(call.from_user.id)
-
-    if step != "profile_confirm":
-        answer(call, "Этот выбор уже неактуален")
-        return
-
     answer(call)
     continue_after_main_profile(
         call.message.chat.id,
@@ -2453,30 +1757,18 @@ def profile_use(call):
 
 @bot.callback_query_handler(func=lambda c: c.data == "profile_change")
 def profile_change(call):
-    touch_user(call.from_user.id)
     answer(call)
-
     set_form_step(call.from_user.id, "name")
 
     bot.send_message(
         call.message.chat.id,
-        "✏️ Хорошо. Как тебя зовут?\n\n"
-        "Напиши только имя.",
+        "✏️ Как тебя зовут?\n\nНапиши только имя.",
     )
 
 
 @bot.callback_query_handler(func=lambda c: c.data == "other_use")
 def other_use(call):
-    touch_user(call.from_user.id)
-
-    _, _, _, _, step = get_profile(call.from_user.id)
-
-    if step != "other_confirm":
-        answer(call, "Этот выбор уже неактуален")
-        return
-
     answer(call)
-
     finish_profile_and_process(
         call.message.chat.id,
         call.from_user.id,
@@ -2485,9 +1777,7 @@ def other_use(call):
 
 @bot.callback_query_handler(func=lambda c: c.data == "other_change")
 def other_change(call):
-    touch_user(call.from_user.id)
     answer(call)
-
     set_form_step(call.from_user.id, "other_name")
 
     bot.send_message(
@@ -2497,7 +1787,7 @@ def other_change(call):
 
 
 # =========================================================
-# ОБРАБОТКА ВЫБРАННОГО РАСКЛАДА
+# ОБРАБОТКА РАСКЛАДА
 # =========================================================
 
 def process_selected_reading(chat_id, user_id, kind, topic, period):
@@ -2508,8 +1798,7 @@ def process_selected_reading(chat_id, user_id, kind, topic, period):
 
             bot.send_message(
                 chat_id,
-                "🎁 Это твой первый расклад "
-                "«3 карты», поэтому он бесплатный.",
+                "🎁 Это твой первый расклад «3 карты», поэтому он бесплатный.",
             )
             bot.send_message(chat_id, result)
             return
@@ -2536,15 +1825,6 @@ def process_selected_reading(chat_id, user_id, kind, topic, period):
 # =========================================================
 
 def send_invoice(chat_id, user_id, kind, topic, period):
-    if not valid_reading_params(kind, topic, period):
-        bot.send_message(
-            chat_id,
-            "❌ Не удалось создать счёт.\n\n"
-            "Начни расклад заново.",
-            reply_markup=main_keyboard(),
-        )
-        return
-
     title = SPREADS[kind][0]
     payload = make_invoice_payload(kind, topic, period, user_id)
 
@@ -2554,8 +1834,7 @@ def send_invoice(chat_id, user_id, kind, topic, period):
         description=(
             f"{topic_name(kind, topic)} · "
             f"{period_name(period)}. "
-            "Персонализированный символический "
-            "расклад Таро из трёх карт."
+            "Персонализированный расклад Таро из трёх карт."
         ),
         invoice_payload=payload,
         provider_token="",
@@ -2568,15 +1847,6 @@ def send_invoice(chat_id, user_id, kind, topic, period):
 
 def offer_payment(chat_id, user_id, kind, topic, period):
     touch_user(user_id)
-
-    if not valid_reading_params(kind, topic, period):
-        bot.send_message(
-            chat_id,
-            "Параметры расклада потеряны.\n\n"
-            "Начни расклад заново.",
-            reply_markup=main_keyboard(),
-        )
-        return
 
     set_pending_reading(
         user_id,
@@ -2604,12 +1874,14 @@ def offer_payment(chat_id, user_id, kind, topic, period):
             callback_data="show_terms",
         )
     )
+
     keyboard.add(
         types.InlineKeyboardButton(
             "✅ Согласен с условиями",
             callback_data=f"agree:{kind}:{topic}:{period}",
         )
     )
+
     keyboard.add(
         types.InlineKeyboardButton(
             "❌ Отменить",
@@ -2622,8 +1894,6 @@ def offer_payment(chat_id, user_id, kind, topic, period):
         f"⭐ Стоимость расклада — {PRICE} Stars.\n\n"
         f"🎯 Тема: {topic_name(kind, topic)}\n"
         f"⏳ Период: {period_name(period)}\n\n"
-        "Ты получишь персонализированную интерпретацию трёх карт, "
-        "их взаимосвязь, общий итог и вопрос для размышления.\n\n"
         "После успешной оплаты результат придёт автоматически.",
         reply_markup=keyboard,
     )
@@ -2631,21 +1901,16 @@ def offer_payment(chat_id, user_id, kind, topic, period):
 
 @bot.callback_query_handler(func=lambda c: c.data == "show_terms")
 def show_terms(call):
-    touch_user(call.from_user.id)
     answer(call)
 
     bot.send_message(
         call.message.chat.id,
         "📖 Условия Таро Оракул\n\n"
-        "Карта дня и Вопрос дня доступны бесплатно раз в день.\n\n"
-        "Первый расклад «3 карты» бесплатный.\n\n"
+        "Карта дня и Вопрос дня доступны бесплатно раз в день.\n"
+        "Первый расклад «3 карты» бесплатный.\n"
         f"Платные расклады стоят {PRICE} Stars.\n\n"
-        "Для персонализации расклада бот может сохранять "
-        "указанные пользователем имя и возраст.\n\n"
         "Все расклады являются развлекательной "
-        "символической интерпретацией, "
-        "а не гарантированным предсказанием.\n\n"
-        "Проблемы с оплатой: /paysupport."
+        "символической интерпретацией."
     )
 
 
@@ -2653,8 +1918,6 @@ def show_terms(call):
     func=lambda c: c.data and c.data.startswith("agree:")
 )
 def agree(call):
-    touch_user(call.from_user.id)
-
     parts = call.data.split(":", maxsplit=3)
 
     if len(parts) != 4:
@@ -2670,10 +1933,7 @@ def agree(call):
     with db() as conn:
         conn.execute("""
             INSERT INTO users (
-                user_id,
-                terms_accepted,
-                created_at,
-                last_seen
+                user_id, terms_accepted, created_at, last_seen
             )
             VALUES (%s, TRUE, now(), now())
 
@@ -2698,24 +1958,13 @@ def agree(call):
 @bot.pre_checkout_query_handler(func=lambda query: True)
 def pre_checkout(query):
     try:
-        touch_user(query.from_user.id)
-
         details = invoice_details(
             query.invoice_payload,
             query.from_user.id,
         )
 
-        with db() as conn:
-            row = conn.execute("""
-                SELECT terms_accepted
-                FROM users
-                WHERE user_id = %s
-            """, (query.from_user.id,)).fetchone()
-
         ok = bool(
             details
-            and row
-            and row[0]
             and query.currency == "XTR"
             and query.total_amount == PRICE
         )
@@ -2726,20 +1975,14 @@ def pre_checkout(query):
             bot.answer_pre_checkout_query(
                 query.id,
                 ok=False,
-                error_message=(
-                    "Не удалось проверить оплату. "
-                    "Начни расклад заново."
-                ),
+                error_message="Не удалось проверить оплату.",
             )
 
     except Exception:
         bot.answer_pre_checkout_query(
             query.id,
             ok=False,
-            error_message=(
-                "Не удалось проверить оплату. "
-                "Попробуй позже."
-            ),
+            error_message="Не удалось проверить оплату.",
         )
 
 
@@ -2761,8 +2004,7 @@ def payment_success(message):
     ):
         bot.send_message(
             message.chat.id,
-            "⚠️ Платёж получен, "
-            "но результат требует проверки.\n\n"
+            "⚠️ Платёж получен, но результат требует проверки.\n\n"
             "Напиши /paysupport.",
         )
         return
@@ -2778,10 +2020,7 @@ def payment_success(message):
         """, (charge_id,)).fetchone()
 
     if existing:
-        if existing[0] != message.from_user.id:
-            return
-
-        if existing[2]:
+        if existing[0] != message.from_user.id or existing[2]:
             return
 
         result = existing[1]
@@ -2806,9 +2045,7 @@ def payment_success(message):
                     period,
                     amount
                 )
-                VALUES (
-                    %s, %s, %s, %s, FALSE, %s, %s, %s
-                )
+                VALUES (%s, %s, %s, %s, FALSE, %s, %s, %s)
                 ON CONFLICT (charge_id)
                 DO NOTHING
             """, (
@@ -2821,34 +2058,10 @@ def payment_success(message):
                 payment.total_amount,
             ))
 
-            stored = conn.execute("""
-                SELECT user_id, result, delivered
-                FROM payments
-                WHERE charge_id = %s
-            """, (charge_id,)).fetchone()
-
-        if not stored:
-            bot.send_message(
-                message.chat.id,
-                "⚠️ Платёж получен, "
-                "но возникла ошибка выдачи.\n\n"
-                "Напиши /paysupport.",
-            )
-            return
-
-        if stored[0] != message.from_user.id:
-            return
-
-        if stored[2]:
-            return
-
-        result = stored[1]
-
     try:
         bot.send_message(
             message.chat.id,
-            "✅ Оплата успешно получена!\n\n"
-            "🔮 Твой расклад готов.",
+            "✅ Оплата успешно получена!\n\n🔮 Твой расклад готов.",
         )
 
         bot.send_message(message.chat.id, result)
@@ -2867,13 +2080,196 @@ def payment_success(message):
 
 
 # =========================================================
-# ПРОЧИЕ ТЕКСТОВЫЕ СООБЩЕНИЯ
+# УСЛОВИЯ / ПОДДЕРЖКА / ПРОМО
 # =========================================================
 
-@bot.message_handler(
-    content_types=["text"],
-    func=lambda m: True,
-)
+@bot.message_handler(commands=["terms"])
+def terms(message):
+    touch_user(message.from_user.id)
+
+    bot.send_message(
+        message.chat.id,
+        "📖 Условия Таро Оракул\n\n"
+        "• Карта дня — бесплатно раз в день.\n"
+        "• Вопрос дня — бесплатно раз в день.\n"
+        "• Первый расклад «3 карты» — бесплатно.\n"
+        f"• Платные расклады — {PRICE} Stars.\n\n"
+        "Расклады являются развлекательной символической интерпретацией, "
+        "а не точным предсказанием.\n\n"
+        "Проблема с оплатой: /paysupport."
+    )
+
+
+@bot.message_handler(commands=["promo"])
+def promo(message):
+    parts = message.text.split(maxsplit=1)
+
+    if len(parts) < 2:
+        bot.send_message(
+            message.chat.id,
+            "🎁 Введи:\n\n/promo КОД",
+        )
+        return
+
+    status, credits = activate_promo(
+        message.from_user.id,
+        parts[1],
+    )
+
+    if status == "invalid":
+        bot.send_message(
+            message.chat.id,
+            "❌ Такой промокод не найден.",
+        )
+        return
+
+    if status == "already":
+        bot.send_message(
+            message.chat.id,
+            "🎁 Промокод уже был активирован.\n\n"
+            f"Осталось бесплатных раскладов: {credits}.",
+        )
+        return
+
+    bot.send_message(
+        message.chat.id,
+        "🎉 Промокод активирован!\n\n"
+        f"Доступно бесплатных раскладов: {credits}.",
+        reply_markup=main_keyboard(),
+    )
+
+
+@bot.message_handler(commands=["support", "paysupport"])
+def support(message):
+    touch_user(message.from_user.id)
+    clear_pending_reading(message.from_user.id)
+
+    with db() as conn:
+        conn.execute("""
+            UPDATE users
+            SET support_pending = TRUE
+            WHERE user_id = %s
+        """, (message.from_user.id,))
+
+    bot.send_message(
+        message.chat.id,
+        "🛟 Опиши проблему одним сообщением.\n\n"
+        "Не присылай пароль, токен или данные банковской карты.",
+    )
+
+
+# =========================================================
+# ТЕСТ ВЛАДЕЛЬЦА
+# =========================================================
+
+@bot.message_handler(commands=["testreading"])
+def testreading(message):
+    if not OWNER_ID or message.from_user.id != OWNER_ID:
+        return
+
+    touch_user(message.from_user.id)
+    parts = message.text.split(maxsplit=1)
+
+    if len(parts) < 2 or parts[1].strip().lower() not in SPREADS:
+        bot.send_message(
+            message.chat.id,
+            "🧪 Тест:\n\n"
+            "/testreading love\n"
+            "/testreading money\n"
+            "/testreading three",
+        )
+        return
+
+    kind = parts[1].strip().lower()
+    test_topic = next(iter(TOPICS[kind]))
+
+    bot.send_message(
+        message.chat.id,
+        "🧪 Тестовый режим владельца. Stars не списываются.",
+    )
+
+    bot.send_message(
+        message.chat.id,
+        spread(
+            kind,
+            test_topic,
+            "near",
+            message.from_user.id,
+        ),
+    )
+
+
+# =========================================================
+# НАПОМИНАНИЯ
+# =========================================================
+
+@bot.message_handler(func=lambda m: m.text == "🔔 Напоминания")
+def reminders_settings(message):
+    touch_user(message.from_user.id)
+    enabled = get_reminders_enabled(message.from_user.id)
+
+    text = (
+        "🔔 Напоминания включены."
+        if enabled
+        else "🔕 Напоминания выключены."
+    )
+
+    bot.send_message(
+        message.chat.id,
+        text,
+        reply_markup=reminder_settings_keyboard(enabled),
+    )
+
+
+@bot.callback_query_handler(func=lambda c: c.data == "reminders_off")
+def reminders_off(call):
+    set_reminders_enabled(call.from_user.id, False)
+    answer(call, "Напоминания выключены")
+
+    bot.send_message(
+        call.message.chat.id,
+        "🔕 Готово. Напоминания выключены.",
+        reply_markup=main_keyboard(),
+    )
+
+
+@bot.callback_query_handler(func=lambda c: c.data == "reminders_on")
+def reminders_on(call):
+    set_reminders_enabled(call.from_user.id, True)
+    answer(call, "Напоминания включены")
+
+    bot.send_message(
+        call.message.chat.id,
+        "🔔 Напоминания включены.",
+        reply_markup=main_keyboard(),
+    )
+
+
+@bot.callback_query_handler(func=lambda c: c.data == "reminder_get_card")
+def reminder_get_card(call):
+    touch_user(call.from_user.id)
+    answer(call)
+
+    if not claim_free(call.from_user.id, "daily_card"):
+        bot.send_message(
+            call.message.chat.id,
+            "🔮 Ты уже получил карту дня сегодня.\n\nВозвращайся завтра ✨",
+            reply_markup=main_keyboard(),
+        )
+        return
+
+    bot.send_message(
+        call.message.chat.id,
+        day_card_text(),
+        reply_markup=main_keyboard(),
+    )
+
+
+# =========================================================
+# ТЕКСТОВЫЕ СООБЩЕНИЯ / АНКЕТА
+# =========================================================
+
+@bot.message_handler(content_types=["text"], func=lambda m: True)
 def other_text(message):
     touch_user(message.from_user.id)
 
@@ -2894,10 +2290,7 @@ def other_text(message):
     if support_pending:
         with db() as conn:
             ticket = conn.execute("""
-                INSERT INTO support_tickets (
-                    user_id,
-                    body
-                )
+                INSERT INTO support_tickets (user_id, body)
                 VALUES (%s, %s)
                 RETURNING id
             """, (
@@ -2907,10 +2300,7 @@ def other_text(message):
 
             conn.execute("""
                 UPDATE users
-                SET
-                    support_pending = FALSE,
-                    last_seen = now(),
-                    reminder_sent_at = NULL
+                SET support_pending = FALSE
                 WHERE user_id = %s
             """, (user_id,))
 
@@ -2927,9 +2317,7 @@ def other_text(message):
                     OWNER_ID,
                     f"🛟 Обращение №{ticket}\n\n"
                     f"Пользователь: {user_id}\n\n"
-                    f"{text[:3500]}\n\n"
-                    f"Ответить:\n"
-                    f"/reply {ticket} текст",
+                    f"{text[:3500]}",
                 )
             except Exception:
                 pass
@@ -2945,8 +2333,7 @@ def other_text(message):
         ):
             bot.send_message(
                 chat_id,
-                "👤 Напиши имя буквами, от 2 до 40 символов.\n\n"
-                "Например: Анна",
+                "👤 Напиши имя буквами, от 2 до 40 символов.",
             )
             return
 
@@ -2957,8 +2344,7 @@ def other_text(message):
         bot.send_message(
             chat_id,
             f"Приятно познакомиться, {name} ✨\n\n"
-            "Теперь напиши свой возраст цифрами.\n\n"
-            "Например: 28",
+            "Теперь напиши свой возраст цифрами.",
         )
         return
 
@@ -2966,8 +2352,7 @@ def other_text(message):
         if not text.isdigit():
             bot.send_message(
                 chat_id,
-                "🎂 Напиши возраст только цифрами.\n\n"
-                "Например: 28",
+                "🎂 Напиши возраст только цифрами.",
             )
             return
 
@@ -2983,10 +2368,7 @@ def other_text(message):
         save_profile_age(user_id, age)
         set_form_step(user_id, None)
 
-        bot.send_message(
-            chat_id,
-            "✅ Данные сохранены.",
-        )
+        bot.send_message(chat_id, "✅ Данные сохранены.")
 
         continue_after_main_profile(chat_id, user_id)
         return
@@ -3000,8 +2382,7 @@ def other_text(message):
         ):
             bot.send_message(
                 chat_id,
-                "💕 Напиши имя человека буквами, "
-                "от 2 до 40 символов.",
+                "💕 Напиши имя человека буквами, от 2 до 40 символов.",
             )
             return
 
@@ -3012,8 +2393,7 @@ def other_text(message):
         bot.send_message(
             chat_id,
             f"💕 {other_name} — принято.\n\n"
-            "Теперь напиши возраст этого человека цифрами.\n\n"
-            "Например: 30",
+            "Теперь напиши возраст этого человека цифрами.",
         )
         return
 
@@ -3039,8 +2419,7 @@ def other_text(message):
 
         bot.send_message(
             chat_id,
-            "✅ Данные для любовного расклада сохранены.\n\n"
-            "Перемешиваю колоду… 🔮",
+            "✅ Данные сохранены.\n\nПеремешиваю колоду… 🔮",
         )
 
         finish_profile_and_process(chat_id, user_id)
@@ -3049,8 +2428,6 @@ def other_text(message):
     bot.send_message(
         chat_id,
         "Я не понял сообщение 🙂\n\n"
-        "Для расклада не нужно писать вопрос вручную — "
-        "выбери нужный вариант кнопками.\n\n"
         "Используй меню ниже 👇",
         reply_markup=main_keyboard(),
     )
