@@ -21,7 +21,7 @@ from telebot import types
 
 TOKEN = os.getenv("BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
-OWNER_ID = int(os.getenv("BOT_OWNER_ID", "0"))
+OWNER_ID = int(os.getenv("BOT_OWNER_ID") or "0")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 PRICE = 50
@@ -610,9 +610,11 @@ def save_other_age(user_id, age):
 
 
 def needs_other_person(kind, topic):
-    return (
-        kind == "love"
-        and topic in ("current", "feelings", "ex", "future")
+    return kind == "love" and topic in (
+        "current",
+        "feelings",
+        "ex",
+        "future",
     )
 
 
@@ -962,9 +964,7 @@ def personalized_focus(kind, topic):
         },
     }
 
-    return focuses.get(
-        kind, {}
-    ).get(
+    return focuses.get(kind, {}).get(
         topic,
         "Посмотри на карты как на дополнительный символический ракурс ситуации.",
     )
@@ -984,7 +984,10 @@ def build_ai_prompt(kind, topic, period, chosen, user_id):
     )
 
     text = (
-        "Создай персонализированный расклад Таро на русском языке.\n\n"
+        "Напиши готовый персонализированный расклад Таро на русском языке.\n"
+        "Верни ТОЛЬКО текст самого расклада для пользователя Telegram-бота.\n"
+        "Не пиши служебные сообщения, классификации безопасности, комментарии "
+        "о запросе, инструкции или фразы вроде User Safety.\n\n"
         f"Имя пользователя: {name or 'не указано'}\n"
         f"Возраст: {age or 'не указан'}\n"
         f"Тема: {topic_name(kind, topic)}\n"
@@ -999,89 +1002,172 @@ def build_ai_prompt(kind, topic, period, chosen, user_id):
         )
 
     text += (
-        "\nВАЖНЫЕ ПРАВИЛА:\n"
-        "1. Обращайся к пользователю по имени, но никогда не угадывай пол по имени. "
-        "Если пол явно не указан, используй только нейтральные по роду формулировки.\n"
-        "2. Не придумывай факты и конкретные события из жизни пользователя.\n"
-        "3. Не утверждай, что карты читают мысли другого человека или точно знают будущее.\n"
-        "4. Пиши красиво и атмосферно, но естественным современным русским языком.\n"
-        "5. Не используй чрезмерный пафос и странные метафоры.\n"
-        "6. Каждая карта должна интерпретироваться именно в своей позиции.\n"
-        "7. Избегай повторов.\n"
-        "8. Не выдавай медицинские, юридические или финансовые советы.\n"
-        "9. Не называй символическую интерпретацию установленным фактом.\n"
-        "10. Весь ответ должен быть короче 3500 символов.\n\n"
-        "СТРУКТУРА ОТВЕТА:\n"
+        "\nПРАВИЛА:\n"
+        "1. Пиши именно расклад, а не анализ запроса.\n"
+        "2. Обращайся к пользователю по имени, но никогда не угадывай пол по имени. "
+        "Если пол явно не указан, используй нейтральные по роду формулировки.\n"
+        "3. Не придумывай конкретные события из жизни пользователя.\n"
+        "4. Не утверждай, что карты достоверно читают мысли другого человека.\n"
+        "5. Будущее описывай только как возможное направление, а не гарантированный факт.\n"
+        "6. Пиши красивым, естественным современным русским языком.\n"
+        "7. Не используй чрезмерный пафос, бессмысленные метафоры и повторы.\n"
+        "8. Каждая карта должна интерпретироваться именно в своей позиции и теме.\n"
+        "9. Не выдавай медицинские, юридические или финансовые рекомендации.\n"
+        "10. Ответ должен быть от 1200 до 3300 символов.\n\n"
+        "СТРУКТУРА:\n"
         f"{SPREADS[kind][0]}\n"
         f"🎯 Тема: {topic_name(kind, topic)}\n"
         f"⏳ Период: {period_name(period)}\n\n"
-        "Разбери три карты по очереди: номер, позиция, название карты "
-        "и короткая содержательная интерпретация.\n\n"
-        "После карт добавь «🔗 Как карты связаны».\n"
-        "Затем добавь «🔮 Общий итог».\n"
-        "В конце добавь «💭 Над чем подумать» и один конкретный вопрос.\n\n"
-        "Будущее описывай только как возможное направление."
+        "Затем три карты по очереди.\n"
+        "Для каждой: номер, название позиции, название карты и содержательная "
+        "интерпретация именно применительно к выбранной теме.\n\n"
+        "После карт:\n"
+        "🔗 Как карты связаны\n"
+        "Объясни общую последовательность карт.\n\n"
+        "🔮 Общий итог\n"
+        "Дай связный итог расклада без категоричных предсказаний.\n\n"
+        "💭 Над чем подумать\n"
+        "Заверши одним конкретным вопросом для размышления.\n\n"
+        "Начинай сразу с названия расклада. Никакого текста до него."
     )
 
     return text
+
+
+def is_bad_ai_response(content):
+    if not content:
+        return True
+
+    cleaned = content.strip()
+    lower = cleaned.lower()
+
+    if len(cleaned) < 300:
+        return True
+
+    bad_phrases = (
+        "user safety:",
+        "user safety",
+        "safety: safe",
+        "safety classification",
+        "safety assessment",
+        "content safety",
+        "policy violation",
+        "request is safe",
+        "the user request",
+        "the user's request",
+        "classification:",
+    )
+
+    if any(phrase in lower for phrase in bad_phrases):
+        return True
+
+    required_markers = (
+        "1",
+        "2",
+        "3",
+    )
+
+    if not all(marker in cleaned for marker in required_markers):
+        return True
+
+    return False
+
+
+def request_openrouter(prompt):
+    response = requests.post(
+        "https://openrouter.ai/api/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": "openrouter/free",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Ты пишешь готовые тексты развлекательных раскладов Таро "
+                        "для Telegram-бота на русском языке. "
+                        "Отвечай исключительно готовым текстом расклада. "
+                        "Никогда не выводи внутренние классификации, служебные пометки, "
+                        "оценки безопасности или фразы вроде User Safety. "
+                        "Не объясняй, что ты модель. "
+                        "Не анализируй сам запрос. "
+                        "Не придумывай реальные факты о пользователе. "
+                        "Не выдавай символическую интерпретацию за точное предсказание. "
+                        "Если пол пользователя явно не указан, используй "
+                        "нейтральные по грамматическому роду формулировки."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": prompt,
+                },
+            ],
+            "temperature": 0.75,
+            "max_tokens": 1400,
+        },
+        timeout=40,
+    )
+
+    response.raise_for_status()
+    data = response.json()
+
+    choices = data.get("choices") or []
+
+    if not choices:
+        return None
+
+    message = choices[0].get("message") or {}
+    content = message.get("content")
+
+    if not isinstance(content, str):
+        return None
+
+    return content.strip()
 
 
 def ai_tarot_reading(kind, topic, period, chosen, user_id):
     if not OPENROUTER_API_KEY:
         return None
 
-    try:
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "openrouter/free",
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": (
-                            "Ты — Таро Оракул в Telegram-боте. "
-                            "Создавай персонализированные расклады Таро на русском языке. "
-                            "Стиль спокойный, атмосферный, понятный и естественный. "
-                            "Не придумывай события из жизни пользователя. "
-                            "Не выдавай символическую интерпретацию за точное предсказание. "
-                            "Если пол пользователя явно не указан, используй "
-                            "нейтральные по грамматическому роду формулировки."
-                        ),
-                    },
-                    {
-                        "role": "user",
-                        "content": build_ai_prompt(
-                            kind,
-                            topic,
-                            period,
-                            chosen,
-                            user_id,
-                        ),
-                    },
-                ],
-                "temperature": 0.8,
-                "max_tokens": 1000,
-            },
-            timeout=30,
-        )
+    prompt = build_ai_prompt(
+        kind,
+        topic,
+        period,
+        chosen,
+        user_id,
+    )
 
-        response.raise_for_status()
-        data = response.json()
+    # У бесплатного роутера OpenRouter модель может меняться.
+    # Поэтому при странном служебном ответе пробуем ещё раз.
+    for attempt in range(3):
+        try:
+            content = request_openrouter(prompt)
 
-        content = data["choices"][0]["message"]["content"]
+            if not is_bad_ai_response(content):
+                print(
+                    f"OpenRouter: нормальный ответ получен, попытка {attempt + 1}",
+                    flush=True,
+                )
+                return content
 
-        if not content or not content.strip():
-            return None
+            print(
+                f"OpenRouter: отброшен некорректный ответ, попытка {attempt + 1}: "
+                f"{repr(content[:200] if content else content)}",
+                flush=True,
+            )
 
-        return content.strip()
+        except Exception as exc:
+            print(
+                f"Ошибка OpenRouter, попытка {attempt + 1}: {repr(exc)}",
+                flush=True,
+            )
 
-    except Exception as exc:
-        print("Ошибка OpenRouter:", repr(exc), flush=True)
-        return None
+        if attempt < 2:
+            time.sleep(1)
+
+    return None
 
 
 def spread(kind, topic=None, period=None, user_id=None):
@@ -1263,6 +1349,7 @@ def continue_after_main_profile(chat_id, user_id):
 
     if not valid_reading_params(kind, topic, period):
         clear_pending_reading(user_id)
+
         bot.send_message(
             chat_id,
             "Параметры расклада потеряны.\n\nНачни расклад заново.",
@@ -1304,6 +1391,7 @@ def finish_profile_and_process(chat_id, user_id):
 
     if not valid_reading_params(kind, topic, period):
         clear_pending_reading(user_id)
+
         bot.send_message(
             chat_id,
             "Параметры расклада потеряны.\n\nНачни расклад заново.",
@@ -1453,6 +1541,7 @@ def send_inactivity_reminders():
                     "Твоя бесплатная Карта дня ждёт тебя ✨",
                     reply_markup=reminder_message_keyboard(),
                 )
+
             except Exception:
                 with db() as conn:
                     conn.execute("""
@@ -1464,7 +1553,11 @@ def send_inactivity_reminders():
             time.sleep(0.2)
 
     except Exception as exc:
-        print("Ошибка проверки напоминаний:", repr(exc), flush=True)
+        print(
+            "Ошибка проверки напоминаний:",
+            repr(exc),
+            flush=True,
+        )
 
 
 def reminder_worker():
@@ -1528,7 +1621,11 @@ def start(message):
             )
 
     except Exception as exc:
-        print("Ошибка приветственной GIF:", repr(exc), flush=True)
+        print(
+            "Ошибка приветственной GIF:",
+            repr(exc),
+            flush=True,
+        )
 
     bot.send_message(
         message.chat.id,
@@ -1548,6 +1645,7 @@ def start(message):
 @bot.message_handler(commands=["myid"])
 def myid(message):
     touch_user(message.from_user.id)
+
     bot.send_message(
         message.chat.id,
         f"Твой Telegram ID: {message.from_user.id}",
@@ -1565,11 +1663,15 @@ def card_of_the_day(message):
     if not claim_free(message.from_user.id, "daily_card"):
         bot.send_message(
             message.chat.id,
-            "🔮 Ты уже получил карту дня сегодня.\n\nВозвращайся завтра ✨",
+            "🔮 Ты уже получил карту дня сегодня.\n\n"
+            "Возвращайся завтра ✨",
         )
         return
 
-    bot.send_message(message.chat.id, day_card_text())
+    bot.send_message(
+        message.chat.id,
+        day_card_text(),
+    )
 
 
 @bot.message_handler(func=lambda m: m.text == "❓ Вопрос дня")
@@ -1579,11 +1681,15 @@ def question_of_the_day(message):
     if not claim_free(message.from_user.id, "daily_question"):
         bot.send_message(
             message.chat.id,
-            "❓ Ты уже получил Вопрос дня сегодня.\n\nВозвращайся завтра ✨",
+            "❓ Ты уже получил Вопрос дня сегодня.\n\n"
+            "Возвращайся завтра ✨",
         )
         return
 
-    bot.send_message(message.chat.id, question_text())
+    bot.send_message(
+        message.chat.id,
+        question_text(),
+    )
 
 
 @bot.message_handler(func=lambda m: m.text == "✨ Сделать расклад")
@@ -1627,7 +1733,10 @@ def about(message):
     func=lambda c:
     c.data
     and c.data.startswith("reading_")
-    and c.data not in ("reading_cancel", "reading_back_topic")
+    and c.data not in (
+        "reading_cancel",
+        "reading_back_topic",
+    )
 )
 def reading_callback(call):
     touch_user(call.from_user.id)
@@ -1638,7 +1747,11 @@ def reading_callback(call):
         answer(call, "Расклад не найден")
         return
 
-    set_pending_reading(call.from_user.id, kind=kind)
+    set_pending_reading(
+        call.from_user.id,
+        kind=kind,
+    )
+
     answer(call)
 
     bot.send_message(
@@ -1650,10 +1763,13 @@ def reading_callback(call):
 
 
 @bot.callback_query_handler(
-    func=lambda c: c.data and c.data.startswith("topic:")
+    func=lambda c:
+    c.data
+    and c.data.startswith("topic:")
 )
 def topic_callback(call):
     touch_user(call.from_user.id)
+
     parts = call.data.split(":", maxsplit=2)
 
     if len(parts) != 3:
@@ -1666,10 +1782,15 @@ def topic_callback(call):
         answer(call, "Тема не найдена")
         return
 
-    pending_kind, _, _ = get_pending_reading(call.from_user.id)
+    pending_kind, _, _ = get_pending_reading(
+        call.from_user.id
+    )
 
     if pending_kind != kind:
-        answer(call, "Этот выбор уже неактуален")
+        answer(
+            call,
+            "Этот выбор уже неактуален",
+        )
         return
 
     set_pending_reading(
@@ -1690,15 +1811,27 @@ def topic_callback(call):
     )
 
 
-@bot.callback_query_handler(func=lambda c: c.data == "reading_back_topic")
+@bot.callback_query_handler(
+    func=lambda c:
+    c.data == "reading_back_topic"
+)
 def back_to_topic(call):
-    kind, _, _ = get_pending_reading(call.from_user.id)
+    kind, _, _ = get_pending_reading(
+        call.from_user.id
+    )
 
     if kind not in SPREADS:
-        answer(call, "Расклад уже завершён")
+        answer(
+            call,
+            "Расклад уже завершён",
+        )
         return
 
-    set_pending_reading(call.from_user.id, kind=kind)
+    set_pending_reading(
+        call.from_user.id,
+        kind=kind,
+    )
+
     answer(call)
 
     bot.send_message(
@@ -1708,27 +1841,48 @@ def back_to_topic(call):
     )
 
 
-@bot.callback_query_handler(func=lambda c: c.data == "reading_cancel")
+@bot.callback_query_handler(
+    func=lambda c:
+    c.data == "reading_cancel"
+)
 def cancel_reading(call):
-    clear_pending_reading(call.from_user.id)
-    answer(call, "Расклад отменён")
+    clear_pending_reading(
+        call.from_user.id
+    )
+
+    answer(
+        call,
+        "Расклад отменён",
+    )
 
     bot.send_message(
         call.message.chat.id,
-        "❌ Расклад отменён.\n\nНичего не списано.",
+        "❌ Расклад отменён.\n\n"
+        "Ничего не списано.",
         reply_markup=main_keyboard(),
     )
 
 
 @bot.callback_query_handler(
-    func=lambda c: c.data and c.data.startswith("period:")
+    func=lambda c:
+    c.data
+    and c.data.startswith("period:")
 )
 def period_callback(call):
     period = call.data.removeprefix("period:")
-    kind, topic, _ = get_pending_reading(call.from_user.id)
+    kind, topic, _ = get_pending_reading(
+        call.from_user.id
+    )
 
-    if not valid_reading_params(kind, topic, period):
-        answer(call, "Этот выбор уже неактуален")
+    if not valid_reading_params(
+        kind,
+        topic,
+        period,
+    ):
+        answer(
+            call,
+            "Этот выбор уже неактуален",
+        )
         return
 
     set_pending_reading(
@@ -1739,50 +1893,78 @@ def period_callback(call):
     )
 
     answer(call)
-    begin_profile(call.message.chat.id, call.from_user.id)
+
+    begin_profile(
+        call.message.chat.id,
+        call.from_user.id,
+    )
 
 
 # =========================================================
 # АНКЕТА CALLBACK
 # =========================================================
 
-@bot.callback_query_handler(func=lambda c: c.data == "profile_use")
+@bot.callback_query_handler(
+    func=lambda c:
+    c.data == "profile_use"
+)
 def profile_use(call):
     answer(call)
+
     continue_after_main_profile(
         call.message.chat.id,
         call.from_user.id,
     )
 
 
-@bot.callback_query_handler(func=lambda c: c.data == "profile_change")
+@bot.callback_query_handler(
+    func=lambda c:
+    c.data == "profile_change"
+)
 def profile_change(call):
     answer(call)
-    set_form_step(call.from_user.id, "name")
+
+    set_form_step(
+        call.from_user.id,
+        "name",
+    )
 
     bot.send_message(
         call.message.chat.id,
-        "✏️ Как тебя зовут?\n\nНапиши только имя.",
+        "✏️ Как тебя зовут?\n\n"
+        "Напиши только имя.",
     )
 
 
-@bot.callback_query_handler(func=lambda c: c.data == "other_use")
+@bot.callback_query_handler(
+    func=lambda c:
+    c.data == "other_use"
+)
 def other_use(call):
     answer(call)
+
     finish_profile_and_process(
         call.message.chat.id,
         call.from_user.id,
     )
 
 
-@bot.callback_query_handler(func=lambda c: c.data == "other_change")
+@bot.callback_query_handler(
+    func=lambda c:
+    c.data == "other_change"
+)
 def other_change(call):
     answer(call)
-    set_form_step(call.from_user.id, "other_name")
+
+    set_form_step(
+        call.from_user.id,
+        "other_name",
+    )
 
     bot.send_message(
         call.message.chat.id,
-        "✏️ Напиши имя человека, о котором этот расклад.",
+        "✏️ Напиши имя человека, "
+        "о котором этот расклад.",
     )
 
 
@@ -1790,43 +1972,98 @@ def other_change(call):
 # ОБРАБОТКА РАСКЛАДА
 # =========================================================
 
-def process_selected_reading(chat_id, user_id, kind, topic, period):
+def process_selected_reading(
+    chat_id,
+    user_id,
+    kind,
+    topic,
+    period,
+):
     if kind == "three":
-        if claim_free(user_id, "three_used"):
-            result = spread(kind, topic, period, user_id)
-            clear_pending_reading(user_id)
+        if claim_free(
+            user_id,
+            "three_used",
+        ):
+            result = spread(
+                kind,
+                topic,
+                period,
+                user_id,
+            )
+
+            clear_pending_reading(
+                user_id
+            )
 
             bot.send_message(
                 chat_id,
-                "🎁 Это твой первый расклад «3 карты», поэтому он бесплатный.",
+                "🎁 Это твой первый расклад "
+                "«3 карты», поэтому он бесплатный.",
             )
-            bot.send_message(chat_id, result)
+
+            bot.send_message(
+                chat_id,
+                result,
+            )
             return
 
-    remaining = claim_promo_credit(user_id)
+    remaining = claim_promo_credit(
+        user_id
+    )
 
     if remaining is not None:
-        result = spread(kind, topic, period, user_id)
-        clear_pending_reading(user_id)
+        result = spread(
+            kind,
+            topic,
+            period,
+            user_id,
+        )
+
+        clear_pending_reading(
+            user_id
+        )
 
         bot.send_message(
             chat_id,
-            "🎁 Использован бесплатный расклад по промокоду.\n\n"
+            "🎁 Использован бесплатный расклад "
+            "по промокоду.\n\n"
             f"Осталось бесплатных раскладов: {remaining}.",
         )
-        bot.send_message(chat_id, result)
+
+        bot.send_message(
+            chat_id,
+            result,
+        )
         return
 
-    offer_payment(chat_id, user_id, kind, topic, period)
+    offer_payment(
+        chat_id,
+        user_id,
+        kind,
+        topic,
+        period,
+    )
 
 
 # =========================================================
 # ОПЛАТА
 # =========================================================
 
-def send_invoice(chat_id, user_id, kind, topic, period):
+def send_invoice(
+    chat_id,
+    user_id,
+    kind,
+    topic,
+    period,
+):
     title = SPREADS[kind][0]
-    payload = make_invoice_payload(kind, topic, period, user_id)
+
+    payload = make_invoice_payload(
+        kind,
+        topic,
+        period,
+        user_id,
+    )
 
     bot.send_invoice(
         chat_id=chat_id,
@@ -1834,18 +2071,28 @@ def send_invoice(chat_id, user_id, kind, topic, period):
         description=(
             f"{topic_name(kind, topic)} · "
             f"{period_name(period)}. "
-            "Персонализированный расклад Таро из трёх карт."
+            "Персонализированный расклад "
+            "Таро из трёх карт."
         ),
         invoice_payload=payload,
         provider_token="",
         currency="XTR",
         prices=[
-            types.LabeledPrice(label=title, amount=PRICE)
+            types.LabeledPrice(
+                label=title,
+                amount=PRICE,
+            )
         ],
     )
 
 
-def offer_payment(chat_id, user_id, kind, topic, period):
+def offer_payment(
+    chat_id,
+    user_id,
+    kind,
+    topic,
+    period,
+):
     touch_user(user_id)
 
     set_pending_reading(
@@ -1863,7 +2110,13 @@ def offer_payment(chat_id, user_id, kind, topic, period):
         """, (user_id,)).fetchone()
 
     if row and row[0]:
-        send_invoice(chat_id, user_id, kind, topic, period)
+        send_invoice(
+            chat_id,
+            user_id,
+            kind,
+            topic,
+            period,
+        )
         return
 
     keyboard = types.InlineKeyboardMarkup()
@@ -1878,7 +2131,9 @@ def offer_payment(chat_id, user_id, kind, topic, period):
     keyboard.add(
         types.InlineKeyboardButton(
             "✅ Согласен с условиями",
-            callback_data=f"agree:{kind}:{topic}:{period}",
+            callback_data=(
+                f"agree:{kind}:{topic}:{period}"
+            ),
         )
     )
 
@@ -1894,46 +2149,69 @@ def offer_payment(chat_id, user_id, kind, topic, period):
         f"⭐ Стоимость расклада — {PRICE} Stars.\n\n"
         f"🎯 Тема: {topic_name(kind, topic)}\n"
         f"⏳ Период: {period_name(period)}\n\n"
-        "После успешной оплаты результат придёт автоматически.",
+        "После успешной оплаты результат "
+        "придёт автоматически.",
         reply_markup=keyboard,
     )
 
 
-@bot.callback_query_handler(func=lambda c: c.data == "show_terms")
+@bot.callback_query_handler(
+    func=lambda c:
+    c.data == "show_terms"
+)
 def show_terms(call):
     answer(call)
 
     bot.send_message(
         call.message.chat.id,
         "📖 Условия Таро Оракул\n\n"
-        "Карта дня и Вопрос дня доступны бесплатно раз в день.\n"
+        "Карта дня и Вопрос дня доступны "
+        "бесплатно раз в день.\n"
         "Первый расклад «3 карты» бесплатный.\n"
         f"Платные расклады стоят {PRICE} Stars.\n\n"
         "Все расклады являются развлекательной "
-        "символической интерпретацией."
+        "символической интерпретацией.",
     )
 
 
 @bot.callback_query_handler(
-    func=lambda c: c.data and c.data.startswith("agree:")
+    func=lambda c:
+    c.data
+    and c.data.startswith("agree:")
 )
 def agree(call):
-    parts = call.data.split(":", maxsplit=3)
+    parts = call.data.split(
+        ":",
+        maxsplit=3,
+    )
 
     if len(parts) != 4:
-        answer(call, "Ошибка параметров")
+        answer(
+            call,
+            "Ошибка параметров",
+        )
         return
 
     _, kind, topic, period = parts
 
-    if not valid_reading_params(kind, topic, period):
-        answer(call, "Расклад уже неактуален")
+    if not valid_reading_params(
+        kind,
+        topic,
+        period,
+    ):
+        answer(
+            call,
+            "Расклад уже неактуален",
+        )
         return
 
     with db() as conn:
         conn.execute("""
             INSERT INTO users (
-                user_id, terms_accepted, created_at, last_seen
+                user_id,
+                terms_accepted,
+                created_at,
+                last_seen
             )
             VALUES (%s, TRUE, now(), now())
 
@@ -1944,7 +2222,10 @@ def agree(call):
                 reminder_sent_at = NULL
         """, (call.from_user.id,))
 
-    answer(call, "Условия приняты")
+    answer(
+        call,
+        "Условия приняты",
+    )
 
     send_invoice(
         call.message.chat.id,
@@ -1955,7 +2236,9 @@ def agree(call):
     )
 
 
-@bot.pre_checkout_query_handler(func=lambda query: True)
+@bot.pre_checkout_query_handler(
+    func=lambda query: True
+)
 def pre_checkout(query):
     try:
         details = invoice_details(
@@ -1970,25 +2253,37 @@ def pre_checkout(query):
         )
 
         if ok:
-            bot.answer_pre_checkout_query(query.id, ok=True)
+            bot.answer_pre_checkout_query(
+                query.id,
+                ok=True,
+            )
+
         else:
             bot.answer_pre_checkout_query(
                 query.id,
                 ok=False,
-                error_message="Не удалось проверить оплату.",
+                error_message=(
+                    "Не удалось проверить оплату."
+                ),
             )
 
     except Exception:
         bot.answer_pre_checkout_query(
             query.id,
             ok=False,
-            error_message="Не удалось проверить оплату.",
+            error_message=(
+                "Не удалось проверить оплату."
+            ),
         )
 
 
-@bot.message_handler(content_types=["successful_payment"])
+@bot.message_handler(
+    content_types=["successful_payment"]
+)
 def payment_success(message):
-    touch_user(message.from_user.id)
+    touch_user(
+        message.from_user.id
+    )
 
     payment = message.successful_payment
 
@@ -2004,13 +2299,16 @@ def payment_success(message):
     ):
         bot.send_message(
             message.chat.id,
-            "⚠️ Платёж получен, но результат требует проверки.\n\n"
+            "⚠️ Платёж получен, но результат "
+            "требует проверки.\n\n"
             "Напиши /paysupport.",
         )
         return
 
     kind, topic, period = details
-    charge_id = payment.telegram_payment_charge_id
+    charge_id = (
+        payment.telegram_payment_charge_id
+    )
 
     with db() as conn:
         existing = conn.execute("""
@@ -2020,7 +2318,10 @@ def payment_success(message):
         """, (charge_id,)).fetchone()
 
     if existing:
-        if existing[0] != message.from_user.id or existing[2]:
+        if (
+            existing[0] != message.from_user.id
+            or existing[2]
+        ):
             return
 
         result = existing[1]
@@ -2045,7 +2346,10 @@ def payment_success(message):
                     period,
                     amount
                 )
-                VALUES (%s, %s, %s, %s, FALSE, %s, %s, %s)
+                VALUES (
+                    %s, %s, %s, %s,
+                    FALSE, %s, %s, %s
+                )
                 ON CONFLICT (charge_id)
                 DO NOTHING
             """, (
@@ -2061,12 +2365,21 @@ def payment_success(message):
     try:
         bot.send_message(
             message.chat.id,
-            "✅ Оплата успешно получена!\n\n🔮 Твой расклад готов.",
+            "✅ Оплата успешно получена!\n\n"
+            "🔮 Твой расклад готов.",
         )
 
-        bot.send_message(message.chat.id, result)
+        bot.send_message(
+            message.chat.id,
+            result,
+        )
 
-    except Exception:
+    except Exception as exc:
+        print(
+            "Ошибка отправки оплаченного расклада:",
+            repr(exc),
+            flush=True,
+        )
         return
 
     with db() as conn:
@@ -2076,7 +2389,9 @@ def payment_success(message):
             WHERE charge_id = %s
         """, (charge_id,))
 
-    clear_pending_reading(message.from_user.id)
+    clear_pending_reading(
+        message.from_user.id
+    )
 
 
 # =========================================================
@@ -2085,7 +2400,9 @@ def payment_success(message):
 
 @bot.message_handler(commands=["terms"])
 def terms(message):
-    touch_user(message.from_user.id)
+    touch_user(
+        message.from_user.id
+    )
 
     bot.send_message(
         message.chat.id,
@@ -2094,20 +2411,24 @@ def terms(message):
         "• Вопрос дня — бесплатно раз в день.\n"
         "• Первый расклад «3 карты» — бесплатно.\n"
         f"• Платные расклады — {PRICE} Stars.\n\n"
-        "Расклады являются развлекательной символической интерпретацией, "
+        "Расклады являются развлекательной "
+        "символической интерпретацией, "
         "а не точным предсказанием.\n\n"
-        "Проблема с оплатой: /paysupport."
+        "Проблема с оплатой: /paysupport.",
     )
 
 
 @bot.message_handler(commands=["promo"])
 def promo(message):
-    parts = message.text.split(maxsplit=1)
+    parts = message.text.split(
+        maxsplit=1
+    )
 
     if len(parts) < 2:
         bot.send_message(
             message.chat.id,
-            "🎁 Введи:\n\n/promo КОД",
+            "🎁 Введи:\n\n"
+            "/promo КОД",
         )
         return
 
@@ -2139,10 +2460,17 @@ def promo(message):
     )
 
 
-@bot.message_handler(commands=["support", "paysupport"])
+@bot.message_handler(
+    commands=["support", "paysupport"]
+)
 def support(message):
-    touch_user(message.from_user.id)
-    clear_pending_reading(message.from_user.id)
+    touch_user(
+        message.from_user.id
+    )
+
+    clear_pending_reading(
+        message.from_user.id
+    )
 
     with db() as conn:
         conn.execute("""
@@ -2154,7 +2482,8 @@ def support(message):
     bot.send_message(
         message.chat.id,
         "🛟 Опиши проблему одним сообщением.\n\n"
-        "Не присылай пароль, токен или данные банковской карты.",
+        "Не присылай пароль, токен "
+        "или данные банковской карты.",
     )
 
 
@@ -2164,13 +2493,25 @@ def support(message):
 
 @bot.message_handler(commands=["testreading"])
 def testreading(message):
-    if not OWNER_ID or message.from_user.id != OWNER_ID:
+    if (
+        not OWNER_ID
+        or message.from_user.id != OWNER_ID
+    ):
         return
 
-    touch_user(message.from_user.id)
-    parts = message.text.split(maxsplit=1)
+    touch_user(
+        message.from_user.id
+    )
 
-    if len(parts) < 2 or parts[1].strip().lower() not in SPREADS:
+    parts = message.text.split(
+        maxsplit=1
+    )
+
+    if (
+        len(parts) < 2
+        or parts[1].strip().lower()
+        not in SPREADS
+    ):
         bot.send_message(
             message.chat.id,
             "🧪 Тест:\n\n"
@@ -2181,21 +2522,26 @@ def testreading(message):
         return
 
     kind = parts[1].strip().lower()
-    test_topic = next(iter(TOPICS[kind]))
-
-    bot.send_message(
-        message.chat.id,
-        "🧪 Тестовый режим владельца. Stars не списываются.",
+    test_topic = next(
+        iter(TOPICS[kind])
     )
 
     bot.send_message(
         message.chat.id,
-        spread(
-            kind,
-            test_topic,
-            "near",
-            message.from_user.id,
-        ),
+        "🧪 Тестовый режим владельца. "
+        "Stars не списываются.",
+    )
+
+    result = spread(
+        kind,
+        test_topic,
+        "near",
+        message.from_user.id,
+    )
+
+    bot.send_message(
+        message.chat.id,
+        result,
     )
 
 
@@ -2203,10 +2549,18 @@ def testreading(message):
 # НАПОМИНАНИЯ
 # =========================================================
 
-@bot.message_handler(func=lambda m: m.text == "🔔 Напоминания")
+@bot.message_handler(
+    func=lambda m:
+    m.text == "🔔 Напоминания"
+)
 def reminders_settings(message):
-    touch_user(message.from_user.id)
-    enabled = get_reminders_enabled(message.from_user.id)
+    touch_user(
+        message.from_user.id
+    )
+
+    enabled = get_reminders_enabled(
+        message.from_user.id
+    )
 
     text = (
         "🔔 Напоминания включены."
@@ -2217,14 +2571,26 @@ def reminders_settings(message):
     bot.send_message(
         message.chat.id,
         text,
-        reply_markup=reminder_settings_keyboard(enabled),
+        reply_markup=reminder_settings_keyboard(
+            enabled
+        ),
     )
 
 
-@bot.callback_query_handler(func=lambda c: c.data == "reminders_off")
+@bot.callback_query_handler(
+    func=lambda c:
+    c.data == "reminders_off"
+)
 def reminders_off(call):
-    set_reminders_enabled(call.from_user.id, False)
-    answer(call, "Напоминания выключены")
+    set_reminders_enabled(
+        call.from_user.id,
+        False,
+    )
+
+    answer(
+        call,
+        "Напоминания выключены",
+    )
 
     bot.send_message(
         call.message.chat.id,
@@ -2233,10 +2599,20 @@ def reminders_off(call):
     )
 
 
-@bot.callback_query_handler(func=lambda c: c.data == "reminders_on")
+@bot.callback_query_handler(
+    func=lambda c:
+    c.data == "reminders_on"
+)
 def reminders_on(call):
-    set_reminders_enabled(call.from_user.id, True)
-    answer(call, "Напоминания включены")
+    set_reminders_enabled(
+        call.from_user.id,
+        True,
+    )
+
+    answer(
+        call,
+        "Напоминания включены",
+    )
 
     bot.send_message(
         call.message.chat.id,
@@ -2245,15 +2621,25 @@ def reminders_on(call):
     )
 
 
-@bot.callback_query_handler(func=lambda c: c.data == "reminder_get_card")
+@bot.callback_query_handler(
+    func=lambda c:
+    c.data == "reminder_get_card"
+)
 def reminder_get_card(call):
-    touch_user(call.from_user.id)
+    touch_user(
+        call.from_user.id
+    )
+
     answer(call)
 
-    if not claim_free(call.from_user.id, "daily_card"):
+    if not claim_free(
+        call.from_user.id,
+        "daily_card",
+    ):
         bot.send_message(
             call.message.chat.id,
-            "🔮 Ты уже получил карту дня сегодня.\n\nВозвращайся завтра ✨",
+            "🔮 Ты уже получил карту дня сегодня.\n\n"
+            "Возвращайся завтра ✨",
             reply_markup=main_keyboard(),
         )
         return
@@ -2269,9 +2655,14 @@ def reminder_get_card(call):
 # ТЕКСТОВЫЕ СООБЩЕНИЯ / АНКЕТА
 # =========================================================
 
-@bot.message_handler(content_types=["text"], func=lambda m: True)
+@bot.message_handler(
+    content_types=["text"],
+    func=lambda m: True,
+)
 def other_text(message):
-    touch_user(message.from_user.id)
+    touch_user(
+        message.from_user.id
+    )
 
     user_id = message.from_user.id
     chat_id = message.chat.id
@@ -2284,13 +2675,23 @@ def other_text(message):
             WHERE user_id = %s
         """, (user_id,)).fetchone()
 
-    support_pending = bool(row and row[0])
-    form_step = row[1] if row else None
+    support_pending = bool(
+        row and row[0]
+    )
+
+    form_step = (
+        row[1]
+        if row
+        else None
+    )
 
     if support_pending:
         with db() as conn:
             ticket = conn.execute("""
-                INSERT INTO support_tickets (user_id, body)
+                INSERT INTO support_tickets (
+                    user_id,
+                    body
+                )
                 VALUES (%s, %s)
                 RETURNING id
             """, (
@@ -2328,18 +2729,30 @@ def other_text(message):
         if (
             len(text) < 2
             or len(text) > 40
-            or any(char.isdigit() for char in text)
+            or any(
+                char.isdigit()
+                for char in text
+            )
             or text.startswith("/")
         ):
             bot.send_message(
                 chat_id,
-                "👤 Напиши имя буквами, от 2 до 40 символов.",
+                "👤 Напиши имя буквами, "
+                "от 2 до 40 символов.",
             )
             return
 
         name = text.capitalize()
-        save_profile_name(user_id, name)
-        set_form_step(user_id, "age")
+
+        save_profile_name(
+            user_id,
+            name,
+        )
+
+        set_form_step(
+            user_id,
+            "age",
+        )
 
         bot.send_message(
             chat_id,
@@ -2365,35 +2778,61 @@ def other_text(message):
             )
             return
 
-        save_profile_age(user_id, age)
-        set_form_step(user_id, None)
+        save_profile_age(
+            user_id,
+            age,
+        )
 
-        bot.send_message(chat_id, "✅ Данные сохранены.")
+        set_form_step(
+            user_id,
+            None,
+        )
 
-        continue_after_main_profile(chat_id, user_id)
+        bot.send_message(
+            chat_id,
+            "✅ Данные сохранены.",
+        )
+
+        continue_after_main_profile(
+            chat_id,
+            user_id,
+        )
         return
 
     if form_step == "other_name":
         if (
             len(text) < 2
             or len(text) > 40
-            or any(char.isdigit() for char in text)
+            or any(
+                char.isdigit()
+                for char in text
+            )
             or text.startswith("/")
         ):
             bot.send_message(
                 chat_id,
-                "💕 Напиши имя человека буквами, от 2 до 40 символов.",
+                "💕 Напиши имя человека буквами, "
+                "от 2 до 40 символов.",
             )
             return
 
         other_name = text.capitalize()
-        save_other_name(user_id, other_name)
-        set_form_step(user_id, "other_age")
+
+        save_other_name(
+            user_id,
+            other_name,
+        )
+
+        set_form_step(
+            user_id,
+            "other_age",
+        )
 
         bot.send_message(
             chat_id,
             f"💕 {other_name} — принято.\n\n"
-            "Теперь напиши возраст этого человека цифрами.",
+            "Теперь напиши возраст этого "
+            "человека цифрами.",
         )
         return
 
@@ -2407,22 +2846,36 @@ def other_text(message):
 
         other_age = int(text)
 
-        if other_age < 18 or other_age > 100:
+        if (
+            other_age < 18
+            or other_age > 100
+        ):
             bot.send_message(
                 chat_id,
                 "🎂 Укажи возраст от 18 до 100 лет.",
             )
             return
 
-        save_other_age(user_id, other_age)
-        set_form_step(user_id, None)
+        save_other_age(
+            user_id,
+            other_age,
+        )
+
+        set_form_step(
+            user_id,
+            None,
+        )
 
         bot.send_message(
             chat_id,
-            "✅ Данные сохранены.\n\nПеремешиваю колоду… 🔮",
+            "✅ Данные сохранены.\n\n"
+            "Перемешиваю колоду… 🔮",
         )
 
-        finish_profile_and_process(chat_id, user_id)
+        finish_profile_and_process(
+            chat_id,
+            user_id,
+        )
         return
 
     bot.send_message(
@@ -2442,11 +2895,15 @@ if __name__ == "__main__":
 
     if not WEBHOOK_BASE_URL:
         raise RuntimeError(
-            "Render не предоставил RENDER_EXTERNAL_URL"
+            "Render не предоставил "
+            "RENDER_EXTERNAL_URL"
         )
 
     bot.set_webhook(
-        url=WEBHOOK_BASE_URL.rstrip("/") + WEBHOOK_PATH,
+        url=(
+            WEBHOOK_BASE_URL.rstrip("/")
+            + WEBHOOK_PATH
+        ),
         allowed_updates=[
             "message",
             "callback_query",
@@ -2462,9 +2919,15 @@ if __name__ == "__main__":
         daemon=True,
         name="reminder-worker",
     )
+
     reminder_thread.start()
 
     app.run(
         host="0.0.0.0",
-        port=int(os.environ.get("PORT", 10000)),
+        port=int(
+            os.environ.get(
+                "PORT",
+                10000,
+            )
+        ),
     )
