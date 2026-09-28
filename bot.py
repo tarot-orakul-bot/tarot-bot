@@ -1998,7 +1998,7 @@ def support(message):
         "🛟 Опиши проблему одним сообщением.\n\n"
         "Не присылай пароль, токен или данные банковской карты.",
     )
-    @bot.message_handler(commands=["supportlist"])
+@bot.message_handler(commands=["supportlist"])
 def support_list(message):
     if not OWNER_ID or message.from_user.id != OWNER_ID:
         return
