@@ -9,6 +9,7 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import psycopg
+import requests
 import telebot
 from flask import Flask, abort, request
 from telebot import types
@@ -21,6 +22,7 @@ from telebot import types
 TOKEN = os.getenv("BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
 OWNER_ID = int(os.getenv("BOT_OWNER_ID", "0"))
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 PRICE = 50
 TZ = ZoneInfo("Asia/Yekaterinburg")
@@ -1225,7 +1227,46 @@ def personalized_focus(kind, topic):
 # =========================================================
 # СОЗДАНИЕ РАСКЛАДА
 # =========================================================
+def ai_tarot_reading(prompt):
+    if not OPENROUTER_API_KEY:
+        return None
 
+    try:
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "openrouter/free",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "Ты — Таро Оракул. Пиши красивые, атмосферные "
+                            "и персонализированные интерпретации Таро на русском языке. "
+                            "Не утверждай, что будущее предопределено, и не выдавай "
+                            "расклад за медицинскую, юридическую или финансовую консультацию."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    },
+                ],
+            },
+            timeout=25,
+        )
+
+        response.raise_for_status()
+        data = response.json()
+
+        return data["choices"][0]["message"]["content"].strip()
+
+    except Exception as exc:
+        print("Ошибка OpenRouter:", repr(exc), flush=True)
+        return None
 def spread(kind, topic=None, period=None, user_id=None):
     title = SPREADS[kind][0]
 
@@ -1237,6 +1278,16 @@ def spread(kind, topic=None, period=None, user_id=None):
 
     positions = reading_positions(kind, topic)
     chosen = random.sample(CARDS, 3)
+        ai_result = ai_tarot_reading(
+        kind,
+        topic,
+        period,
+        chosen,
+        user_id,
+    )
+
+    if ai_result:
+        return ai_result
 
     if kind == "love":
         meaning_index = 2
