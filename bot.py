@@ -1,4 +1,4 @@
-онimport hashlib
+import hashlib
 import hmac
 import os
 import random
