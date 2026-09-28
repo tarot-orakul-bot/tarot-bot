@@ -1277,8 +1277,10 @@ def spread(kind, topic=None, period=None, user_id=None):
         period = "none"
 
     positions = reading_positions(kind, topic)
+    
     chosen = random.sample(CARDS, 3)
-        ai_result = ai_tarot_reading(
+
+    ai_result = ai_tarot_reading(
         kind,
         topic,
         period,
