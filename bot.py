@@ -1,4 +1,4 @@
-import hashlib
+онimport hashlib
 import hmac
 import os
 import random
@@ -1227,7 +1227,38 @@ def personalized_focus(kind, topic):
 # =========================================================
 # СОЗДАНИЕ РАСКЛАДА
 # =========================================================
-def ai_tarot_reading(prompt):
+def build_ai_prompt(kind, topic, period, chosen, user_id):
+    name, age, other_name, other_age, _ = get_profile(user_id)
+
+    cards_text = "\n".join(
+        f"{i + 1}. {card[0]}"
+        for i, card in enumerate(chosen)
+    )
+
+    text = (
+        f"Сделай персонализированный расклад Таро.\n\n"
+        f"Имя: {name or 'не указано'}\n"
+        f"Возраст: {age or 'не указан'}\n"
+        f"Тема: {topic_name(kind, topic)}\n"
+        f"Период: {period_name(period)}\n"
+        f"Карты:\n{cards_text}\n"
+    )
+
+    if needs_other_person(kind, topic) and other_name and other_age:
+        text += (
+            f"\nВторой человек: {other_name}, "
+            f"{other_age} лет.\n"
+        )
+
+    text += (
+        "\nДай подробную интерпретацию каждой из трёх карт, "
+        "объясни их связь между собой и сделай общий итог. "
+        "Обращайся к пользователю по имени. "
+        "Не утверждай, что будущее предопределено."
+    )
+
+    return text
+def ai_tarot_reading(kind, topic, period, chosen, user_id):
     if not OPENROUTER_API_KEY:
         return None
 
@@ -1252,7 +1283,7 @@ def ai_tarot_reading(prompt):
                     },
                     {
                         "role": "user",
-                        "content": prompt,
+                        "content":  build_ai_prompt(kind, topic, period, chosen, user_id),
                     },
                 ],
             },
