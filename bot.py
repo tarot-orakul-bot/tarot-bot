@@ -1747,8 +1747,6 @@ def validate_ai_response(
     ):
         return False, "service_output"
 
-    if contains_formal_address(text):
-        return False, "formal_address"
 
     english = unwanted_english_words(text)
 
