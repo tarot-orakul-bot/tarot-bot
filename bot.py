@@ -78,6 +78,7 @@ CARDS = [
         "Она способна заинтересовать, но карта напоминает: энтузиазм лучше сочетать "
         "с проверкой цифр и небольшими безопасными шагами.",
         "00_fool.png.PNG",
+        "flip_00_fool.gif",
     ),
     (
         "🪄 Маг",
@@ -91,6 +92,7 @@ CARDS = [
         "Полезно подумать, какие способности уже можно применить для увеличения дохода "
         "или улучшения текущей ситуации.",
         "01_magician.png.PNG",
+        "flip_01_magician.gif",
     ),
     (
         "🔮 Верховная Жрица",
@@ -104,6 +106,7 @@ CARDS = [
         "Если что-то кажется непонятным или слишком привлекательным, "
         "полезно сначала получить дополнительную информацию.",
         "02_priestess.png.PNG",
+        "flip_02_priestess.gif",
     ),
     (
         "👑 Императрица",
@@ -116,6 +119,7 @@ CARDS = [
         "Вместо ожидания мгновенного результата полезно развивать то, "
         "что уже показывает потенциал.",
         "03_empress.png.PNG",
+        "flip_03_empress.gif",
     ),
     (
         "🏛 Император",
@@ -128,6 +132,7 @@ CARDS = [
         "Бюджет, контроль обязательств и понятная цель могут оказаться "
         "полезнее спонтанных решений.",
         "04_emperor.png.PNG",
+        "flip_04_emperor.gif",
     ),
     (
         "📜 Иерофант",
@@ -138,6 +143,7 @@ CARDS = [
         "В денежных вопросах важно внимательно относиться к правилам, документам "
         "и обязательствам. В сложных ситуациях лучше опираться на проверенную информацию.",
         "05_hierophant.png.PNG",
+        "flip_05_hierophant.gif",
     ),
     (
         "❤️ Влюблённые",
@@ -150,6 +156,7 @@ CARDS = [
         "Сравни их не только по потенциальной выгоде, но и по рискам, "
         "обязательствам и долгосрочным целям.",
         "06_lovers.png.PNG",
+        "flip_06_lovers.gif",
     ),
     (
         "🏇 Колесница",
@@ -161,6 +168,7 @@ CARDS = [
         "В деньгах полезно выбрать одну конкретную цель и направить усилия именно на неё. "
         "Контроль прогресса поможет понять, что действительно работает.",
         "07_chariot.png.PNG",
+        "flip_07_chariot.gif",
     ),
     (
         "🦁 Сила",
@@ -172,6 +180,7 @@ CARDS = [
         "В финансовых вопросах важно контролировать импульсивные решения. "
         "Последовательность и дисциплина сейчас могут быть особенно полезны.",
         "08_strength.png.PNG",
+        "flip_08_strength.gif",
     ),
     (
         "🕯 Отшельник",
@@ -183,6 +192,7 @@ CARDS = [
         "В деньгах карта предлагает спокойно проанализировать прошлые решения, "
         "доходы и расходы прежде, чем менять стратегию.",
         "09_hermit.png.PNG",
+        "flip_09_hermit.gif",
     ),
     (
         "🎡 Колесо Фортуны",
@@ -195,6 +205,7 @@ CARDS = [
         "Не стоит полагаться исключительно на удачу — запасной план и резерв "
         "помогают снизить зависимость от обстоятельств.",
         "10_wheel_of_fortune.png.PNG",
+        "flip_10_wheel_of_fortune.gif",
     ),
     (
         "⚖️ Справедливость",
@@ -205,6 +216,7 @@ CARDS = [
         "В денежных вопросах особенно важны цифры, документы и условия. "
         "Решение лучше принимать после внимательного сравнения вариантов.",
         "11_justice.png.PNG",
+        "flip_11_justice.gif",
     ),
     (
         "🙃 Повешенный",
@@ -216,6 +228,7 @@ CARDS = [
         "Если финансовое решение не срочное, небольшая пауза может защитить "
         "от импульсивного шага и дать время оценить его реальную ценность.",
         "12_hanged_man.png.PNG",
+        "flip_12_hanged_man.gif",
     ),
     (
         "🍂 Смерть",
@@ -227,6 +240,7 @@ CARDS = [
         "В денежных вопросах полезно пересмотреть устаревшие расходы, обязательства "
         "или планы и направить ресурсы на более актуальные цели.",
         "13_death.png.PNG",
+        "flip_13_death.gif",
     ),
     (
         "🌿 Умеренность",
@@ -237,6 +251,7 @@ CARDS = [
         "В финансовой сфере разумный баланс расходов и накоплений "
         "может оказаться эффективнее крайностей.",
         "14_temperance.png.PNG",
+        "flip_14_temperance.gif",
     ),
     (
         "⛓ Дьявол",
@@ -248,6 +263,7 @@ CARDS = [
         "В денежных вопросах стоит внимательнее относиться к долгам "
         "и слишком заманчивым обещаниям. Условия лучше проверять особенно тщательно.",
         "15_devil.png.PNG",
+        "flip_15_devil.gif",
     ),
     (
         "⚡ Башня",
@@ -260,6 +276,7 @@ CARDS = [
         "В финансовой теме карта напоминает о важности запаса прочности "
         "и осторожности с крупными обязательствами.",
         "16_tower.png.PNG",
+        "flip_16_tower.gif",
     ),
     (
         "⭐ Звезда",
@@ -270,6 +287,7 @@ CARDS = [
         "В денежных вопросах полезно смотреть на долгосрочную цель. "
         "Раздели её на небольшие измеримые этапы и отмечай прогресс.",
         "17_star.png.PNG",
+        "flip_17_star.gif",
     ),
     (
         "🌙 Луна",
@@ -281,6 +299,7 @@ CARDS = [
         "Если цифры или условия непонятны, не торопись принимать финансовое решение. "
         "Сначала получи недостающую информацию.",
         "18_moon.png.JPEG",
+        "flip_18_moon.gif",
     ),
     (
         "☀️ Солнце",
@@ -292,6 +311,7 @@ CARDS = [
         "В финансовых вопросах стоит обратить внимание на действия, "
         "которые уже дают измеримый результат, и развивать именно их.",
         "19_sun.png.PNG",
+        "flip_19_sun.gif",
     ),
     (
         "📣 Суд",
@@ -303,6 +323,7 @@ CARDS = [
         "В финансовой сфере анализ прежних решений поможет скорректировать цели "
         "и не повторять одни и те же ошибки.",
         "20_judgement.png.PNG",
+        "flip_20_judgement.gif",
     ),
     (
         "🌍 Мир",
@@ -313,6 +334,7 @@ CARDS = [
         "В денежных вопросах полезно подвести промежуточные итоги, "
         "оценить прогресс и выбрать следующую реалистичную цель.",
         "21_world.png.PNG",
+        "flip_21_world.gif",
     ),
 ]
 
@@ -998,7 +1020,7 @@ def reminder_settings_keyboard(enabled):
 
 
 # =========================================================
-# ИЗОБРАЖЕНИЯ КАРТ
+# ИЗОБРАЖЕНИЯ И GIF КАРТ
 # =========================================================
 
 def card_image_path(card):
@@ -1006,6 +1028,55 @@ def card_image_path(card):
         BASE_DIR,
         card[4],
     )
+
+
+def card_gif_path(card):
+    return os.path.join(
+        BASE_DIR,
+        card[5],
+    )
+
+
+def send_card_animation(
+    chat_id,
+    card,
+    caption=None,
+):
+    gif_path = card_gif_path(card)
+
+    try:
+        if not os.path.isfile(gif_path):
+            print(
+                f"GIF карты не найдена: {gif_path}",
+                flush=True,
+            )
+            return send_card_image(
+                chat_id,
+                card,
+                caption=caption,
+            )
+
+        with open(gif_path, "rb") as animation:
+            bot.send_animation(
+                chat_id=chat_id,
+                animation=animation,
+                caption=caption,
+            )
+
+        return True
+
+    except Exception as exc:
+        print(
+            "Ошибка отправки GIF карты "
+            f"{card[0]}: {repr(exc)}",
+            flush=True,
+        )
+
+        return send_card_image(
+            chat_id,
+            card,
+            caption=caption,
+        )
 
 
 def send_card_image(
@@ -1046,77 +1117,19 @@ def send_spread_images(
     chosen,
     positions,
 ):
-    media = []
-    opened_files = []
-
-    try:
-        for index, card in enumerate(chosen):
-            path = card_image_path(card)
-
-            if not os.path.isfile(path):
-                print(
-                    f"Изображение карты не найдено: {path}",
-                    flush=True,
-                )
-                continue
-
-            photo = open(path, "rb")
-            opened_files.append(photo)
-
-            caption = (
+    for index, card in enumerate(chosen):
+        send_card_animation(
+            chat_id,
+            card,
+            caption=(
                 f"{NUMBERS[index]} {positions[index]}\n"
                 f"{card[0]}"
-            )
-
-            media.append(
-                types.InputMediaPhoto(
-                    media=photo,
-                    caption=caption,
-                )
-            )
-
-        if len(media) == 3:
-            bot.send_media_group(
-                chat_id=chat_id,
-                media=media,
-            )
-            return True
-
-    except Exception as exc:
-        print(
-            "Ошибка отправки изображений расклада:",
-            repr(exc),
-            flush=True,
+            ),
         )
 
-    finally:
-        for photo in opened_files:
-            try:
-                photo.close()
-            except Exception:
-                pass
+        time.sleep(0.4)
 
-    # Если альбом не отправился, пробуем по одной карте.
-    try:
-        for index, card in enumerate(chosen):
-            send_card_image(
-                chat_id,
-                card,
-                caption=(
-                    f"{NUMBERS[index]} {positions[index]}\n"
-                    f"{card[0]}"
-                ),
-            )
-
-        return True
-
-    except Exception as exc:
-        print(
-            "Ошибка резервной отправки карт:",
-            repr(exc),
-            flush=True,
-        )
-        return False
+    return True
 
 
 # =========================================================
@@ -1146,9 +1159,7 @@ def valid_reading_params(kind, topic, period):
         and topic in TOPICS.get(kind, {})
         and period in PERIODS
     )
-
-
-def reading_positions(kind, topic):
+    def reading_positions(kind, topic):
     positions = {
         "love": {
             "current": (
@@ -1477,10 +1488,7 @@ def build_ai_prompt(
 """.strip()
 
 
-def validate_ai_response(
-    content,
-    chosen,
-):
+def validate_ai_response(content, chosen):
     if not isinstance(content, str):
         return False, "empty"
 
@@ -1508,19 +1516,12 @@ def validate_ai_response(
         "я не могу предоставить",
     )
 
-    if any(
-        phrase in lower
-        for phrase in bad_phrases
-    ):
+    if any(phrase in lower for phrase in bad_phrases):
         return False, "service_output"
 
     for card in chosen:
         card_name = card[0]
-
-        parts = card_name.split(
-            " ",
-            maxsplit=1,
-        )
+        parts = card_name.split(" ", maxsplit=1)
 
         plain_name = (
             parts[1]
@@ -1529,10 +1530,7 @@ def validate_ai_response(
         )
 
         if plain_name.lower() not in lower:
-            return (
-                False,
-                f"missing_card:{plain_name}",
-            )
+            return False, f"missing_card:{plain_name}"
 
     required_sections = (
         "1️⃣",
@@ -1545,10 +1543,7 @@ def validate_ai_response(
 
     for marker in required_sections:
         if marker not in lower:
-            return (
-                False,
-                f"missing_section:{marker}",
-            )
+            return False, f"missing_section:{marker}"
 
     return True, "ok"
 
@@ -1586,10 +1581,8 @@ def request_openrouter(prompt):
     response = requests.post(
         "https://openrouter.ai/api/v1/chat/completions",
         headers={
-            "Authorization":
-                f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type":
-                "application/json",
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json",
         },
         json={
             "model": OPENROUTER_MODEL,
@@ -1628,7 +1621,6 @@ def request_openrouter(prompt):
     response.raise_for_status()
 
     data = response.json()
-
     choices = data.get("choices") or []
 
     if not choices:
@@ -1661,9 +1653,7 @@ def ai_tarot_reading(
 
     for attempt in range(2):
         try:
-            content = request_openrouter(
-                prompt
-            )
+            content = request_openrouter(prompt)
 
             valid, reason = validate_ai_response(
                 content,
@@ -1707,21 +1697,13 @@ def spread(
     period=None,
     user_id=None,
 ):
-    if topic not in TOPICS.get(
-        kind,
-        {},
-    ):
-        topic = next(
-            iter(TOPICS[kind])
-        )
+    if topic not in TOPICS.get(kind, {}):
+        topic = next(iter(TOPICS[kind]))
 
     if period not in PERIODS:
         period = "none"
 
-    positions = reading_positions(
-        kind,
-        topic,
-    )
+    positions = reading_positions(kind, topic)
 
     chosen = random.sample(
         CARDS,
@@ -1754,14 +1736,8 @@ def spread(
     else:
         meaning_index = 1
 
-    selected_topic = topic_name(
-        kind,
-        topic,
-    )
-
-    selected_period = period_name(
-        period
-    )
+    selected_topic = topic_name(kind, topic)
+    selected_period = period_name(period)
 
     profile_lines = []
 
@@ -1780,10 +1756,7 @@ def spread(
             )
 
         if (
-            needs_other_person(
-                kind,
-                topic,
-            )
+            needs_other_person(kind, topic)
             and other_name
             and other_age
         ):
@@ -1800,24 +1773,15 @@ def spread(
     ]
 
     if profile_lines:
-        lines.extend(
-            profile_lines
-        )
+        lines.extend(profile_lines)
 
     lines.extend([
         "",
-        personalized_focus(
-            kind,
-            topic,
-        ),
+        personalized_focus(kind, topic),
         "",
     ])
 
-    for (
-        number,
-        position,
-        card,
-    ) in zip(
+    for number, position, card in zip(
         NUMBERS,
         positions,
         chosen,
@@ -1828,10 +1792,7 @@ def spread(
             f"{card[meaning_index]}"
         )
 
-    names = [
-        card[0]
-        for card in chosen
-    ]
+    names = [card[0] for card in chosen]
 
     lines.append(
         "🔗 Как карты связаны\n\n"
@@ -1858,9 +1819,7 @@ def spread(
         "ожиданием или предположением?"
     )
 
-    return "\n\n".join(
-        lines
-    ), chosen
+    return "\n\n".join(lines), chosen
 
 
 def send_reading_result(
@@ -1892,9 +1851,7 @@ def send_reading_result(
 # =========================================================
 
 def choose_day_card():
-    return random.choice(
-        CARDS
-    )
+    return random.choice(CARDS)
 
 
 def day_card_text(card):
@@ -1944,13 +1901,8 @@ def answer(call, text=None):
 # АНКЕТА — ЛОГИКА
 # =========================================================
 
-def begin_profile(
-    chat_id,
-    user_id,
-):
-    name, age, _, _, _ = get_profile(
-        user_id
-    )
+def begin_profile(chat_id, user_id):
+    name, age, _, _, _ = get_profile(user_id)
 
     if name and age:
         set_form_step(
@@ -1969,10 +1921,7 @@ def begin_profile(
         )
         return
 
-    set_form_step(
-        user_id,
-        "name",
-    )
+    set_form_step(user_id, "name")
 
     bot.send_message(
         chat_id,
@@ -1983,22 +1932,15 @@ def begin_profile(
     )
 
 
-def continue_after_main_profile(
-    chat_id,
-    user_id,
-):
-    kind, topic, period = get_pending_reading(
-        user_id
-    )
+def continue_after_main_profile(chat_id, user_id):
+    kind, topic, period = get_pending_reading(user_id)
 
     if not valid_reading_params(
         kind,
         topic,
         period,
     ):
-        clear_pending_reading(
-            user_id
-        )
+        clear_pending_reading(user_id)
 
         bot.send_message(
             chat_id,
@@ -2008,10 +1950,7 @@ def continue_after_main_profile(
         )
         return
 
-    if needs_other_person(
-        kind,
-        topic,
-    ):
+    if needs_other_person(kind, topic):
         (
             _,
             _,
@@ -2056,27 +1995,17 @@ def continue_after_main_profile(
     )
 
 
-def finish_profile_and_process(
-    chat_id,
-    user_id,
-):
-    set_form_step(
-        user_id,
-        None,
-    )
+def finish_profile_and_process(chat_id, user_id):
+    set_form_step(user_id, None)
 
-    kind, topic, period = get_pending_reading(
-        user_id
-    )
+    kind, topic, period = get_pending_reading(user_id)
 
     if not valid_reading_params(
         kind,
         topic,
         period,
     ):
-        clear_pending_reading(
-            user_id
-        )
+        clear_pending_reading(user_id)
 
         bot.send_message(
             chat_id,
@@ -2099,13 +2028,8 @@ def finish_profile_and_process(
 # ПРОМО
 # =========================================================
 
-def activate_promo(
-    user_id,
-    code,
-):
-    normalized_code = (
-        code.strip().upper()
-    )
+def activate_promo(user_id, code):
+    normalized_code = code.strip().upper()
 
     if normalized_code != PROMO_CODE:
         return "invalid", 0
@@ -2191,10 +2115,7 @@ def get_reminders_enabled(user_id):
     return bool(row[0])
 
 
-def set_reminders_enabled(
-    user_id,
-    enabled,
-):
+def set_reminders_enabled(user_id, enabled):
     touch_user(user_id)
 
     with db() as conn:
@@ -2213,9 +2134,7 @@ def set_reminders_enabled(
 def send_inactivity_reminders():
     cutoff = (
         datetime.now(TZ)
-        - timedelta(
-            days=REMINDER_AFTER_DAYS
-        )
+        - timedelta(days=REMINDER_AFTER_DAYS)
     )
 
     try:
@@ -2257,9 +2176,7 @@ def send_inactivity_reminders():
                     "🔮 Заглянем в карты?\n\n"
                     "Твоя бесплатная Карта дня "
                     "ждёт тебя ✨",
-                    reply_markup=(
-                        reminder_message_keyboard()
-                    ),
+                    reply_markup=reminder_message_keyboard(),
                 )
 
             except Exception:
@@ -2285,10 +2202,7 @@ def reminder_worker():
 
     while True:
         send_inactivity_reminders()
-
-        time.sleep(
-            REMINDER_CHECK_SECONDS
-        )
+        time.sleep(REMINDER_CHECK_SECONDS)
 
 
 # =========================================================
@@ -2310,10 +2224,7 @@ def make_invoice_payload(
     )
 
 
-def invoice_details(
-    payload,
-    user_id,
-):
+def invoice_details(payload, user_id):
     parts = payload.split(":")
 
     if len(parts) != 5:
@@ -2334,9 +2245,7 @@ def invoice_details(
     ):
         return None
 
-    if payload_user_id != str(
-        user_id
-    ):
+    if payload_user_id != str(user_id):
         return None
 
     if len(payment_nonce) != 32:
@@ -2351,36 +2260,11 @@ def invoice_details(
 
 @bot.message_handler(commands=["start"])
 def start(message):
-    touch_user(
-        message.from_user.id
-    )
+    touch_user(message.from_user.id)
 
     clear_pending_reading(
         message.from_user.id
     )
-
-    try:
-        gif_path = os.path.join(
-            BASE_DIR,
-            "9062F346-A2BF-4C00-9A56-9599938CD487.MP4",
-        )
-
-        with open(
-            gif_path,
-            "rb",
-        ) as animation:
-            bot.send_animation(
-                chat_id=message.chat.id,
-                animation=animation,
-                caption="🔮 ТАРО ОРАКУЛ",
-            )
-
-    except Exception as exc:
-        print(
-            "Ошибка приветственной GIF:",
-            repr(exc),
-            flush=True,
-        )
 
     bot.send_message(
         message.chat.id,
@@ -2399,14 +2283,11 @@ def start(message):
 
 @bot.message_handler(commands=["myid"])
 def myid(message):
-    touch_user(
-        message.from_user.id
-    )
+    touch_user(message.from_user.id)
 
     bot.send_message(
         message.chat.id,
-        f"Твой Telegram ID: "
-        f"{message.from_user.id}",
+        f"Твой Telegram ID: {message.from_user.id}",
     )
 
 
@@ -2415,13 +2296,10 @@ def myid(message):
 # =========================================================
 
 @bot.message_handler(
-    func=lambda m:
-    m.text == "🔮 Карта дня"
+    func=lambda m: m.text == "🔮 Карта дня"
 )
 def card_of_the_day(message):
-    touch_user(
-        message.from_user.id
-    )
+    touch_user(message.from_user.id)
 
     if not claim_free(
         message.from_user.id,
@@ -2436,7 +2314,7 @@ def card_of_the_day(message):
 
     card = choose_day_card()
 
-    send_card_image(
+    send_card_animation(
         message.chat.id,
         card,
         caption=f"🔮 {card[0]}",
@@ -2449,13 +2327,10 @@ def card_of_the_day(message):
 
 
 @bot.message_handler(
-    func=lambda m:
-    m.text == "❓ Вопрос дня"
+    func=lambda m: m.text == "❓ Вопрос дня"
 )
 def question_of_the_day(message):
-    touch_user(
-        message.from_user.id
-    )
+    touch_user(message.from_user.id)
 
     if not claim_free(
         message.from_user.id,
@@ -2470,7 +2345,7 @@ def question_of_the_day(message):
 
     card = choose_day_card()
 
-    send_card_image(
+    send_card_animation(
         message.chat.id,
         card,
         caption=f"❓ {card[0]}",
@@ -2483,13 +2358,10 @@ def question_of_the_day(message):
 
 
 @bot.message_handler(
-    func=lambda m:
-    m.text == "✨ Сделать расклад"
+    func=lambda m: m.text == "✨ Сделать расклад"
 )
 def reading(message):
-    touch_user(
-        message.from_user.id
-    )
+    touch_user(message.from_user.id)
 
     clear_pending_reading(
         message.from_user.id
@@ -2507,13 +2379,10 @@ def reading(message):
 
 
 @bot.message_handler(
-    func=lambda m:
-    m.text == "ℹ️ О боте"
+    func=lambda m: m.text == "ℹ️ О боте"
 )
 def about(message):
-    touch_user(
-        message.from_user.id
-    )
+    touch_user(message.from_user.id)
 
     bot.send_message(
         message.chat.id,
@@ -2545,19 +2414,14 @@ def about(message):
     )
 )
 def reading_callback(call):
-    touch_user(
-        call.from_user.id
-    )
+    touch_user(call.from_user.id)
 
     kind = call.data.removeprefix(
         "reading_"
     )
 
     if kind not in SPREADS:
-        answer(
-            call,
-            "Расклад не найден",
-        )
+        answer(call, "Расклад не найден")
         return
 
     set_pending_reading(
@@ -2571,9 +2435,7 @@ def reading_callback(call):
         call.message.chat.id,
         f"{SPREADS[kind][0]}\n\n"
         "🎯 Выбери тему:",
-        reply_markup=topics_keyboard(
-            kind
-        ),
+        reply_markup=topics_keyboard(kind),
     )
 
 
@@ -2583,9 +2445,7 @@ def reading_callback(call):
     and c.data.startswith("topic:")
 )
 def topic_callback(call):
-    touch_user(
-        call.from_user.id
-    )
+    touch_user(call.from_user.id)
 
     parts = call.data.split(
         ":",
@@ -2593,10 +2453,7 @@ def topic_callback(call):
     )
 
     if len(parts) != 3:
-        answer(
-            call,
-            "Ошибка выбора",
-        )
+        answer(call, "Ошибка выбора")
         return
 
     _, kind, topic = parts
@@ -2605,16 +2462,11 @@ def topic_callback(call):
         kind not in TOPICS
         or topic not in TOPICS[kind]
     ):
-        answer(
-            call,
-            "Тема не найдена",
-        )
+        answer(call, "Тема не найдена")
         return
 
-    pending_kind, _, _ = (
-        get_pending_reading(
-            call.from_user.id
-        )
+    pending_kind, _, _ = get_pending_reading(
+        call.from_user.id
     )
 
     if pending_kind != kind:
@@ -2668,9 +2520,7 @@ def back_to_topic(call):
     bot.send_message(
         call.message.chat.id,
         "🎯 Выбери другую тему:",
-        reply_markup=topics_keyboard(
-            kind
-        ),
+        reply_markup=topics_keyboard(kind),
     )
 
 
@@ -2683,10 +2533,7 @@ def cancel_reading(call):
         call.from_user.id
     )
 
-    answer(
-        call,
-        "Расклад отменён",
-    )
+    answer(call, "Расклад отменён")
 
     bot.send_message(
         call.message.chat.id,
@@ -2834,9 +2681,7 @@ def process_selected_reading(
                 user_id,
             )
 
-            clear_pending_reading(
-                user_id
-            )
+            clear_pending_reading(user_id)
 
             send_reading_result(
                 chat_id,
@@ -2869,9 +2714,7 @@ def process_selected_reading(
             user_id,
         )
 
-        clear_pending_reading(
-            user_id
-        )
+        clear_pending_reading(user_id)
 
         send_reading_result(
             chat_id,
@@ -2940,9 +2783,7 @@ def offer_payment(
     topic,
     period,
 ):
-    touch_user(
-        user_id
-    )
+    touch_user(user_id)
 
     set_pending_reading(
         user_id,
@@ -3035,10 +2876,7 @@ def agree(call):
     )
 
     if len(parts) != 4:
-        answer(
-            call,
-            "Ошибка параметров",
-        )
+        answer(call, "Ошибка параметров")
         return
 
     _, kind, topic, period = parts
@@ -3071,10 +2909,7 @@ def agree(call):
                 reminder_sent_at = NULL
         """, (call.from_user.id,))
 
-    answer(
-        call,
-        "Условия приняты",
-    )
+    answer(call, "Условия приняты")
 
     send_invoice(
         call.message.chat.id,
@@ -3106,7 +2941,6 @@ def pre_checkout(query):
                 query.id,
                 ok=True,
             )
-
         else:
             bot.answer_pre_checkout_query(
                 query.id,
@@ -3130,13 +2964,9 @@ def pre_checkout(query):
     content_types=["successful_payment"]
 )
 def payment_success(message):
-    touch_user(
-        message.from_user.id
-    )
+    touch_user(message.from_user.id)
 
-    payment = (
-        message.successful_payment
-    )
+    payment = message.successful_payment
 
     details = invoice_details(
         payment.invoice_payload,
@@ -3174,16 +3004,12 @@ def payment_success(message):
 
     if existing:
         if (
-            existing[0]
-            != message.from_user.id
+            existing[0] != message.from_user.id
             or existing[2]
         ):
             return
 
         result = existing[1]
-
-        # Для старого незавершённого платежа изображения
-        # восстановить невозможно, поэтому отправляем текст.
         chosen = None
 
     else:
@@ -3269,9 +3095,7 @@ def payment_success(message):
 
 @bot.message_handler(commands=["terms"])
 def terms(message):
-    touch_user(
-        message.from_user.id
-    )
+    touch_user(message.from_user.id)
 
     bot.send_message(
         message.chat.id,
@@ -3289,9 +3113,7 @@ def terms(message):
 
 @bot.message_handler(commands=["promo"])
 def promo(message):
-    parts = message.text.split(
-        maxsplit=1
-    )
+    parts = message.text.split(maxsplit=1)
 
     if len(parts) < 2:
         bot.send_message(
@@ -3338,9 +3160,7 @@ def promo(message):
     ]
 )
 def support(message):
-    touch_user(
-        message.from_user.id
-    )
+    touch_user(message.from_user.id)
 
     clear_pending_reading(
         message.from_user.id
@@ -3351,9 +3171,7 @@ def support(message):
             UPDATE users
             SET support_pending = TRUE
             WHERE user_id = %s
-        """, (
-            message.from_user.id,
-        ))
+        """, (message.from_user.id,))
 
     bot.send_message(
         message.chat.id,
@@ -3371,18 +3189,13 @@ def support(message):
 def testreading(message):
     if (
         not OWNER_ID
-        or message.from_user.id
-        != OWNER_ID
+        or message.from_user.id != OWNER_ID
     ):
         return
 
-    touch_user(
-        message.from_user.id
-    )
+    touch_user(message.from_user.id)
 
-    parts = message.text.split(
-        maxsplit=1
-    )
+    parts = message.text.split(maxsplit=1)
 
     if (
         len(parts) < 2
@@ -3398,11 +3211,7 @@ def testreading(message):
         )
         return
 
-    kind = (
-        parts[1]
-        .strip()
-        .lower()
-    )
+    kind = parts[1].strip().lower()
 
     test_topic = next(
         iter(TOPICS[kind])
@@ -3440,9 +3249,7 @@ def testreading(message):
     m.text == "🔔 Напоминания"
 )
 def reminders_settings(message):
-    touch_user(
-        message.from_user.id
-    )
+    touch_user(message.from_user.id)
 
     enabled = get_reminders_enabled(
         message.from_user.id
@@ -3458,9 +3265,7 @@ def reminders_settings(message):
         message.chat.id,
         text,
         reply_markup=(
-            reminder_settings_keyboard(
-                enabled
-            )
+            reminder_settings_keyboard(enabled)
         ),
     )
 
@@ -3514,9 +3319,7 @@ def reminders_on(call):
     c.data == "reminder_get_card"
 )
 def reminder_get_card(call):
-    touch_user(
-        call.from_user.id
-    )
+    touch_user(call.from_user.id)
 
     answer(call)
 
@@ -3534,7 +3337,7 @@ def reminder_get_card(call):
 
     card = choose_day_card()
 
-    send_card_image(
+    send_card_animation(
         call.message.chat.id,
         card,
         caption=f"🔮 {card[0]}",
@@ -3556,21 +3359,11 @@ def reminder_get_card(call):
     func=lambda m: True,
 )
 def other_text(message):
-    touch_user(
-        message.from_user.id
-    )
+    touch_user(message.from_user.id)
 
-    user_id = (
-        message.from_user.id
-    )
-
-    chat_id = (
-        message.chat.id
-    )
-
-    text = (
-        message.text or ""
-    ).strip()
+    user_id = message.from_user.id
+    chat_id = message.chat.id
+    text = (message.text or "").strip()
 
     with db() as conn:
         row = conn.execute("""
@@ -3582,8 +3375,7 @@ def other_text(message):
         """, (user_id,)).fetchone()
 
     support_pending = bool(
-        row
-        and row[0]
+        row and row[0]
     )
 
     form_step = (
@@ -3627,7 +3419,6 @@ def other_text(message):
                     f"Пользователь: {user_id}\n\n"
                     f"{text[:3500]}",
                 )
-
             except Exception:
                 pass
 
@@ -3681,10 +3472,7 @@ def other_text(message):
 
         age = int(text)
 
-        if (
-            age < 18
-            or age > 100
-        ):
+        if age < 18 or age > 100:
             bot.send_message(
                 chat_id,
                 "🎂 Укажи возраст от 18 до 100 лет.",
@@ -3759,14 +3547,9 @@ def other_text(message):
             )
             return
 
-        other_age = int(
-            text
-        )
+        other_age = int(text)
 
-        if (
-            other_age < 18
-            or other_age > 100
-        ):
+        if other_age < 18 or other_age > 100:
             bot.send_message(
                 chat_id,
                 "🎂 Укажи возраст от 18 до 100 лет.",
