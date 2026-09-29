@@ -4059,6 +4059,79 @@ def support_reply_handler(message):
 # =========================================================
 # ТЕСТ РАСКЛАДА ВЛАДЕЛЬЦА
 # =========================================================
+@bot.message_handler(commands=["stats"])
+def stats_handler(message):
+    if (
+        not OWNER_ID
+        or message.from_user.id != OWNER_ID
+    ):
+        return
+
+    try:
+        with db() as conn:
+            total_users = conn.execute("""
+                SELECT COUNT(*)
+                FROM users
+            """).fetchone()[0]
+
+            new_today = conn.execute("""
+                SELECT COUNT(*)
+                FROM users
+                WHERE created_at >= CURRENT_DATE
+            """).fetchone()[0]
+
+            new_7_days = conn.execute("""
+                SELECT COUNT(*)
+                FROM users
+                WHERE created_at >= now() - INTERVAL '7 days'
+            """).fetchone()[0]
+
+            free_three = conn.execute("""
+                SELECT COUNT(*)
+                FROM users
+                WHERE three_used = TRUE
+            """).fetchone()[0]
+
+            payments = conn.execute("""
+                SELECT COUNT(*)
+                FROM payments
+            """).fetchone()[0]
+
+            stars = conn.execute("""
+                SELECT COALESCE(SUM(amount), 0)
+                FROM payments
+            """).fetchone()[0]
+
+            undelivered = conn.execute("""
+                SELECT COUNT(*)
+                FROM payments
+                WHERE delivered = FALSE
+            """).fetchone()[0]
+
+        bot.send_message(
+            message.chat.id,
+            "📊 Статистика Таро Оракул\n\n"
+            f"👥 Всего пользователей: {total_users}\n"
+            f"🆕 Новых сегодня: {new_today}\n"
+            f"📅 Новых за 7 дней: {new_7_days}\n\n"
+            f"🔮 Использовали бесплатный «3 карты»: {free_three}\n\n"
+            f"⭐ Оплаченных раскладов: {payments}\n"
+            f"💫 Получено Stars: {stars}\n"
+            f"⚠️ Не доставлено оплаченных: {undelivered}"
+        )
+
+    except Exception as exc:
+        print(
+            "Ошибка /stats:",
+            repr(exc),
+            flush=True,
+        )
+
+        bot.send_message(
+            message.chat.id,
+            "❌ Не удалось получить статистику."
+        )
+
 
 @bot.message_handler(
     commands=["testreading"]
