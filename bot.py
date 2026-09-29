@@ -1724,22 +1724,7 @@ def validate_ai_response(
     ):
         return False, "wrong_start"
 
-    required_sections = [
-        "🔗 Как карты связаны",
-        "🔮 Общий итог",
-        "💭 Над чем подумать",
-    ]
-
-    for section in required_sections:
-        if not section_present(
-            text,
-            section,
-        ):
-            return (
-                False,
-                "missing_section:"
-                + normalize_heading(section),
-            )
+    
 
     normalized = normalize_for_check(text)
 
