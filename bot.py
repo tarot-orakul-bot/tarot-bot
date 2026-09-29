@@ -4,6 +4,7 @@ import json
 import os
 import queue
 import random
+import re
 import threading
 import time
 from datetime import datetime, timedelta
@@ -645,6 +646,50 @@ def claim_free(user_id, field):
         return row is not None
 
 
+def restore_free_three(user_id):
+    try:
+        with db() as conn:
+            conn.execute("""
+                UPDATE users
+                SET three_used = FALSE
+                WHERE user_id = %s
+            """, (user_id,))
+
+        print(
+            f"Бесплатный расклад возвращён пользователю {user_id}",
+            flush=True,
+        )
+
+    except Exception as exc:
+        print(
+            "Не удалось вернуть бесплатный расклад:",
+            repr(exc),
+            flush=True,
+        )
+
+
+def restore_promo_credit(user_id):
+    try:
+        with db() as conn:
+            conn.execute("""
+                UPDATE users
+                SET promo_credits = promo_credits + 1
+                WHERE user_id = %s
+            """, (user_id,))
+
+        print(
+            f"Промокредит возвращён пользователю {user_id}",
+            flush=True,
+        )
+
+    except Exception as exc:
+        print(
+            "Не удалось вернуть промокредит:",
+            repr(exc),
+            flush=True,
+        )
+
+
 # =========================================================
 # СОСТОЯНИЕ РАСКЛАДА
 # =========================================================
@@ -1095,6 +1140,9 @@ def send_card_animation(
                 caption=caption,
             )
 
+        # ВАЖНО:
+        # 6 секунд уже проверены на реальных GIF.
+        # Не менять без необходимости.
         time.sleep(6)
 
         try:
@@ -1438,8 +1486,83 @@ def personalized_focus(kind, topic):
 
 
 # =========================================================
-# ИИ
+# ИИ — ОЧИСТКА И ПРОВЕРКА
 # =========================================================
+
+def normalize_for_check(text):
+    if not isinstance(text, str):
+        return ""
+
+    normalized = text.lower().replace("ё", "е")
+
+    normalized = re.sub(
+        r"[^\wа-яА-Я]+",
+        " ",
+        normalized,
+        flags=re.UNICODE,
+    )
+
+    return re.sub(
+        r"\s+",
+        " ",
+        normalized,
+    ).strip()
+
+
+def has_unwanted_english(text):
+    """
+    В готовом пользовательском раскладе не должно быть
+    случайных английских слов вроде permission.
+
+    Допускаем только очень короткие технически нейтральные
+    фрагменты, но полноценные английские слова отклоняем.
+    """
+    if not isinstance(text, str):
+        return False
+
+    english_words = re.findall(
+        r"\b[A-Za-z][A-Za-z'-]{2,}\b",
+        text,
+    )
+
+    if not english_words:
+        return False
+
+    allowed = {
+        "tarot",
+    }
+
+    unwanted = [
+        word
+        for word in english_words
+        if word.lower() not in allowed
+    ]
+
+    if unwanted:
+        print(
+            "OpenRouter: найдены английские слова:",
+            ", ".join(unwanted[:10]),
+            flush=True,
+        )
+        return True
+
+    return False
+
+
+def section_present(text, section):
+    """
+    Проверяем смысл заголовка, а не точное наличие эмодзи.
+    Поэтому варианты:
+    '🔮 Общий итог'
+    'Общий итог'
+    '🔮 **Общий итог**'
+    будут приняты одинаково.
+    """
+    normalized_text = normalize_for_check(text)
+    normalized_section = normalize_for_check(section)
+
+    return normalized_section in normalized_text
+
 
 def build_ai_prompt(
     kind,
@@ -1486,10 +1609,15 @@ def build_ai_prompt(
 Никаких рассуждений о том, как ты составляешь ответ.
 Никакого анализа задания.
 Никаких служебных комментариев.
-Никаких "thinking process", "analysis", "reasoning",
-"here's a thinking process", "let's craft", "we need to".
+Не показывай внутренний процесс рассуждения.
 Не пересказывай инструкции и не объясняй структуру ответа.
-Первая строка ответа должна быть ТОЧНО:
+
+Пиши ТОЛЬКО на русском языке.
+Не вставляй английские слова или фразы.
+Если в исходных инструкциях встречаются английские технические слова,
+не повторяй их в готовом раскладе.
+
+Первая строка ответа должна быть:
 {SPREADS[kind][0]}
 
 ДАННЫЕ:
@@ -1526,9 +1654,10 @@ def build_ai_prompt(
 
 8. Не определяй пол по имени.
 
-9. Пиши естественным русским языком.
+9. Пиши естественным русским языком без иностранных вставок.
 
-10. Не повторяй одни и те же фразы.
+10. Не повторяй одни и те же фразы и однокоренные слова
+рядом без необходимости.
 
 11. Каждую карту связывай именно с её позицией.
 
@@ -1586,8 +1715,8 @@ def build_ai_prompt(
 
 Один конкретный вопрос.
 
-Ещё раз: не показывай анализ или процесс рассуждения.
-Начни ответ сразу с точной строки:
+Ещё раз: верни только готовый русский текст расклада.
+Начни ответ сразу с:
 {SPREADS[kind][0]}
 """.strip()
 
@@ -1601,7 +1730,7 @@ def clean_ai_response(content, kind):
     if not cleaned:
         return None
 
-    # Убираем случайные Markdown-ограждения.
+    # Убираем Markdown-ограждения.
     if cleaned.startswith("```"):
         first_newline = cleaned.find("\n")
 
@@ -1615,33 +1744,55 @@ def clean_ai_response(content, kind):
 
     expected_title = SPREADS[kind][0]
 
-    # Некоторые бесплатные модели сначала печатают
-    # собственный анализ, а уже потом готовый расклад.
-    # Берём начало ПОСЛЕДНЕГО вхождения заголовка,
-    # чтобы не захватить заголовок, процитированный
-    # внутри служебного рассуждения.
+    # Сначала ищем точный заголовок.
     title_position = cleaned.rfind(
         expected_title
     )
 
+    # Если модель слегка изменила Markdown вокруг заголовка,
+    # пробуем найти название расклада без эмодзи.
     if title_position == -1:
-        return cleaned
+        plain_title = re.sub(
+            r"^[^\wА-Яа-яЁё]+",
+            "",
+            expected_title,
+        ).strip()
 
-    cleaned = cleaned[
-        title_position:
-    ].strip()
+        title_position = cleaned.lower().rfind(
+            plain_title.lower()
+        )
 
-    # Если модель после готового ответа снова начала
-    # печатать служебные рассуждения, отсекаем хвост.
+    if title_position != -1:
+        cleaned = cleaned[
+            title_position:
+        ].strip()
+
+        # Если эмодзи заголовка потерялось, возвращаем
+        # единый красивый заголовок.
+        if not cleaned.startswith(expected_title):
+            first_newline = cleaned.find("\n")
+
+            if first_newline == -1:
+                cleaned = expected_title
+            else:
+                cleaned = (
+                    expected_title
+                    + cleaned[first_newline:]
+                ).strip()
+
+    # Если после готового ответа модель снова начала
+    # печатать служебный текст — отрезаем хвост.
     trailing_markers = (
-        "\nHere's a thinking process",
-        "\nHere is a thinking process",
-        "\nThinking process:",
-        "\nAnalysis:",
-        "\nReasoning:",
-        "\nLet's analyze",
-        "\nLet's craft",
-        "\nWe need to",
+        "\nhere's a thinking process",
+        "\nhere is a thinking process",
+        "\nthinking process:",
+        "\nanalysis:",
+        "\nreasoning:",
+        "\nlet's analyze",
+        "\nlet's craft",
+        "\nwe need to",
+        "\nпроцесс рассуждения:",
+        "\nанализ запроса:",
     )
 
     lower = cleaned.lower()
@@ -1649,14 +1800,12 @@ def clean_ai_response(content, kind):
 
     for marker in trailing_markers:
         position = lower.find(
-            marker.lower(),
+            marker,
             1,
         )
 
         if position != -1:
-            cut_positions.append(
-                position
-            )
+            cut_positions.append(position)
 
     if cut_positions:
         cleaned = cleaned[
@@ -1681,14 +1830,13 @@ def validate_ai_response(
 
     expected_title = SPREADS[kind][0]
 
-    # Ответ обязан начинаться с готового расклада.
+    # После clean_ai_response нормальный ответ
+    # должен начинаться с нашего заголовка.
     if not cleaned.startswith(
         expected_title
     ):
         return False, "wrong_start"
 
-    # Отсекаем как обрывки, так и подозрительно
-    # огромные ответы со служебными рассуждениями.
     if len(cleaned) < 700:
         return False, "too_short"
 
@@ -1713,7 +1861,6 @@ def validate_ai_response(
         "requirements:",
         "safety:",
         "user safety:",
-        "safety: safe",
         "safety classification",
         "safety assessment",
         "content safety classification",
@@ -1738,6 +1885,14 @@ def validate_ai_response(
     ):
         return False, "service_output"
 
+    # Не пропускаем случайные английские вставки.
+    if has_unwanted_english(cleaned):
+        return False, "english_text"
+
+    normalized = normalize_for_check(
+        cleaned
+    )
+
     for card in chosen:
         card_name = card[0]
 
@@ -1752,23 +1907,40 @@ def validate_ai_response(
             else card_name
         )
 
-        if plain_name.lower() not in lower:
+        if normalize_for_check(
+            plain_name
+        ) not in normalized:
             return (
                 False,
                 f"missing_card:{plain_name}",
             )
 
-    required_sections = (
+    # Цифры позиций должны присутствовать.
+    for marker in (
         "1️⃣",
         "2️⃣",
         "3️⃣",
-        "🔗 как карты связаны",
-        "🔮 общий итог",
-        "💭 над чем подумать",
+    ):
+        if marker not in cleaned:
+            return (
+                False,
+                f"missing_section:{marker}",
+            )
+
+    # А текстовые заголовки проверяем мягко:
+    # эмодзи/Markdown/регистр больше не ломают
+    # нормальный ответ модели.
+    required_sections = (
+        "как карты связаны",
+        "общий итог",
+        "над чем подумать",
     )
 
     for marker in required_sections:
-        if marker not in lower:
+        if not section_present(
+            cleaned,
+            marker,
+        ):
             return (
                 False,
                 f"missing_section:{marker}",
@@ -1840,9 +2012,12 @@ def request_openrouter(prompt):
                         "на русском языке. "
                         "Возвращай только готовый текст "
                         "для пользователя. "
-                        "Никогда не показывай анализ, reasoning, "
-                        "thinking process, внутренние рассуждения "
-                        "или пересказ инструкций. "
+                        "Весь пользовательский ответ должен "
+                        "быть написан только по-русски, "
+                        "без английских слов и фраз. "
+                        "Никогда не показывай анализ, "
+                        "внутренние рассуждения или "
+                        "пересказ инструкций. "
                         "Ответ должен быть полностью закончен. "
                         "Обязательно раскрой все три карты, "
                         "их взаимосвязь, общий итог "
@@ -1888,10 +2063,9 @@ def request_openrouter(prompt):
         or {}
     )
 
-    # ВАЖНО:
-    # пользователю отправляем только content.
-    # Поля reasoning/reasoning_content никогда
-    # не используем как готовый ответ.
+    # Используем только content.
+    # reasoning и reasoning_content пользователю
+    # никогда не отправляются.
     return extract_openrouter_content(
         message.get("content")
     )
@@ -2012,13 +2186,21 @@ def spread(
     user_id=None,
     chosen=None,
 ):
+    if kind not in SPREADS:
+        raise ValueError(
+            f"Неизвестный тип расклада: {kind}"
+        )
+
     if topic not in TOPICS.get(kind, {}):
         topic = next(iter(TOPICS[kind]))
 
     if period not in PERIODS:
         period = "none"
 
-    positions = reading_positions(kind, topic)
+    positions = reading_positions(
+        kind,
+        topic,
+    )
 
     if chosen is None:
         chosen = random.sample(
@@ -2052,8 +2234,14 @@ def spread(
     else:
         meaning_index = 1
 
-    selected_topic = topic_name(kind, topic)
-    selected_period = period_name(period)
+    selected_topic = topic_name(
+        kind,
+        topic,
+    )
+
+    selected_period = period_name(
+        period
+    )
 
     profile_lines = []
 
@@ -2093,7 +2281,10 @@ def spread(
 
     lines.extend([
         "",
-        personalized_focus(kind, topic),
+        personalized_focus(
+            kind,
+            topic,
+        ),
         "",
     ])
 
@@ -2108,25 +2299,30 @@ def spread(
             f"{card[meaning_index]}"
         )
 
-    names = [card[0] for card in chosen]
+    names = [
+        card[0]
+        for card in chosen
+    ]
 
     lines.append(
         "🔗 Как карты связаны\n\n"
         f"{names[0]}, {names[1]} и {names[2]} "
-        "создают общий символический сюжет расклада. "
-        "Первая карта задаёт исходную тему, "
-        "вторая показывает, как эта тема развивается "
-        "в текущей позиции, а третья добавляет направление, "
-        "на которое особенно полезно обратить внимание."
+        "создают последовательность из трёх символических тем. "
+        "Первая карта показывает исходный контекст, "
+        "вторая помогает посмотреть на то, что важно сейчас, "
+        "а третья указывает на аспект, который стоит учитывать дальше. "
+        "Полезно сопоставить значения всех трёх карт "
+        "с реальными обстоятельствами ситуации."
     )
 
     lines.append(
         "🔮 Общий итог\n\n"
         f"Сочетание карт {names[0]}, {names[1]} "
-        f"и {names[2]} предлагает посмотреть на ситуацию "
-        "с нескольких сторон и сопоставить символический "
-        "смысл расклада с реальными обстоятельствами. "
-        "Карты не определяют неизбежный исход ситуации."
+        f"и {names[2]} предлагает рассмотреть ситуацию "
+        "не как заранее определённый сценарий, "
+        "а как несколько связанных между собой тем. "
+        "Обрати внимание на то, что уже можно оценить по фактам, "
+        "и на действия, которые действительно зависят от тебя."
     )
 
     lines.append(
@@ -2146,6 +2342,7 @@ def card_indices(chosen):
             indices.append(
                 CARDS.index(card)
             )
+
         except ValueError:
             return None
 
@@ -2170,8 +2367,11 @@ def cards_from_json(cards_json):
         chosen = []
 
         for index in indices:
+            # bool является подклассом int,
+            # поэтому отдельно его запрещаем.
             if (
-                not isinstance(index, int)
+                isinstance(index, bool)
+                or not isinstance(index, int)
                 or index < 0
                 or index >= len(CARDS)
             ):
@@ -2180,6 +2380,10 @@ def cards_from_json(cards_json):
             chosen.append(
                 CARDS[index]
             )
+
+        # В обычном раскладе карты не повторяются.
+        if len(set(indices)) != 3:
+            return None
 
         return chosen
 
@@ -2199,6 +2403,18 @@ def send_reading_result(
     result,
     chosen,
 ):
+    if (
+        kind not in SPREADS
+        or topic not in TOPICS.get(kind, {})
+        or not chosen
+        or len(chosen) != 3
+    ):
+        print(
+            "Некорректные данные для отправки расклада",
+            flush=True,
+        )
+        return False
+
     positions = reading_positions(
         kind,
         topic,
@@ -2610,7 +2826,13 @@ def send_inactivity_reminders():
                     reply_markup=reminder_message_keyboard(),
                 )
 
-            except Exception:
+            except Exception as exc:
+                print(
+                    "Не удалось отправить напоминание "
+                    f"пользователю {user_id}: {repr(exc)}",
+                    flush=True,
+                )
+
                 with db() as conn:
                     conn.execute("""
                         UPDATE users
@@ -2634,7 +2856,15 @@ def reminder_worker():
     time.sleep(15)
 
     while True:
-        send_inactivity_reminders()
+        try:
+            send_inactivity_reminders()
+        except Exception as exc:
+            print(
+                "Ошибка reminder_worker:",
+                repr(exc),
+                flush=True,
+            )
+
         time.sleep(
             REMINDER_CHECK_SECONDS
         )
@@ -2663,6 +2893,9 @@ def invoice_details(
     payload,
     user_id,
 ):
+    if not isinstance(payload, str):
+        return None
+
     parts = payload.split(":")
 
     if len(parts) != 5:
@@ -2688,7 +2921,10 @@ def invoice_details(
     ):
         return None
 
-    if len(payment_nonce) != 32:
+    if not re.fullmatch(
+        r"[0-9a-f]{32}",
+        payment_nonce,
+    ):
         return None
 
     return (
@@ -2769,16 +3005,23 @@ def card_of_the_day(message):
 
     card = choose_day_card()
 
-    send_card_animation(
+    image_sent = send_card_animation(
         message.chat.id,
         card,
         caption=f"🔮 {card[0]}",
     )
 
-    send_long_message(
+    text_sent = send_long_message(
         message.chat.id,
         day_card_text(card),
     )
+
+    if not image_sent or not text_sent:
+        print(
+            "Карта дня отправлена не полностью "
+            f"пользователю {message.from_user.id}",
+            flush=True,
+        )
 
 
 @bot.message_handler(
@@ -2803,16 +3046,23 @@ def question_of_the_day(message):
 
     card = choose_day_card()
 
-    send_card_animation(
+    image_sent = send_card_animation(
         message.chat.id,
         card,
         caption=f"❓ {card[0]}",
     )
 
-    send_long_message(
+    text_sent = send_long_message(
         message.chat.id,
         question_text(card),
     )
+
+    if not image_sent or not text_sent:
+        print(
+            "Вопрос дня отправлен не полностью "
+            f"пользователю {message.from_user.id}",
+            flush=True,
+        )
 
 
 @bot.message_handler(
@@ -3148,6 +3398,23 @@ def process_selected_reading(
     topic,
     period,
 ):
+    if not valid_reading_params(
+        kind,
+        topic,
+        period,
+    ):
+        clear_pending_reading(
+            user_id
+        )
+
+        bot.send_message(
+            chat_id,
+            "⚠️ Не удалось восстановить параметры расклада.\n\n"
+            "Начни расклад заново.",
+            reply_markup=main_keyboard(),
+        )
+        return
+
     if kind == "three":
         if claim_free(
             user_id,
@@ -3160,25 +3427,49 @@ def process_selected_reading(
                 "🔮 Перемешиваю колоду…",
             )
 
-            result, chosen = spread(
-                kind,
-                topic,
-                period,
-                user_id,
-            )
+            try:
+                result, chosen = spread(
+                    kind,
+                    topic,
+                    period,
+                    user_id,
+                )
 
-            clear_pending_reading(
+                delivered = send_reading_result(
+                    chat_id,
+                    kind,
+                    topic,
+                    result,
+                    chosen,
+                )
+
+            except Exception as exc:
+                print(
+                    "Ошибка бесплатного расклада:",
+                    repr(exc),
+                    flush=True,
+                )
+                delivered = False
+
+            if delivered:
+                clear_pending_reading(
+                    user_id
+                )
+                return
+
+            # Если бесплатный расклад реально не доставился,
+            # пользователь не теряет свою единственную попытку.
+            restore_free_three(
                 user_id
             )
 
-            send_reading_result(
+            bot.send_message(
                 chat_id,
-                kind,
-                topic,
-                result,
-                chosen,
+                "⚠️ Не удалось полностью отправить расклад.\n\n"
+                "Бесплатная попытка сохранена. "
+                "Попробуй ещё раз немного позже.",
+                reply_markup=main_keyboard(),
             )
-
             return
 
     remaining = claim_promo_credit(
@@ -3195,25 +3486,49 @@ def process_selected_reading(
             "🔮 Перемешиваю колоду…",
         )
 
-        result, chosen = spread(
-            kind,
-            topic,
-            period,
-            user_id,
-        )
+        try:
+            result, chosen = spread(
+                kind,
+                topic,
+                period,
+                user_id,
+            )
 
-        clear_pending_reading(
+            delivered = send_reading_result(
+                chat_id,
+                kind,
+                topic,
+                result,
+                chosen,
+            )
+
+        except Exception as exc:
+            print(
+                "Ошибка проморасклада:",
+                repr(exc),
+                flush=True,
+            )
+            delivered = False
+
+        if delivered:
+            clear_pending_reading(
+                user_id
+            )
+            return
+
+        # Если доставка не состоялась,
+        # возвращаем списанный промокредит.
+        restore_promo_credit(
             user_id
         )
 
-        send_reading_result(
+        bot.send_message(
             chat_id,
-            kind,
-            topic,
-            result,
-            chosen,
+            "⚠️ Не удалось полностью отправить расклад.\n\n"
+            "Бесплатный расклад по промокоду возвращён. "
+            "Попробуй ещё раз немного позже.",
+            reply_markup=main_keyboard(),
         )
-
         return
 
     offer_payment(
@@ -3391,6 +3706,25 @@ def agree(call):
         )
         return
 
+    # Не даём старой кнопке оплаты запустить
+    # другой или уже отменённый расклад.
+    pending_kind, pending_topic, pending_period = (
+        get_pending_reading(
+            call.from_user.id
+        )
+    )
+
+    if (
+        pending_kind != kind
+        or pending_topic != topic
+        or pending_period != period
+    ):
+        answer(
+            call,
+            "Этот выбор уже неактуален",
+        )
+        return
+
     with db() as conn:
         conn.execute("""
             INSERT INTO users (
@@ -3455,14 +3789,23 @@ def pre_checkout(query):
                 ),
             )
 
-    except Exception:
-        bot.answer_pre_checkout_query(
-            query.id,
-            ok=False,
-            error_message=(
-                "Не удалось проверить оплату."
-            ),
+    except Exception as exc:
+        print(
+            "Ошибка pre_checkout:",
+            repr(exc),
+            flush=True,
         )
+
+        try:
+            bot.answer_pre_checkout_query(
+                query.id,
+                ok=False,
+                error_message=(
+                    "Не удалось проверить оплату."
+                ),
+            )
+        except Exception:
+            pass
 
 
 @bot.message_handler(
@@ -3549,6 +3892,25 @@ def payment_success(message):
             existing[5]
             or period
         )
+
+        if not valid_reading_params(
+            stored_kind,
+            stored_topic,
+            stored_period,
+        ):
+            print(
+                "Некорректные сохранённые параметры платежа:",
+                charge_id,
+                flush=True,
+            )
+
+            bot.send_message(
+                message.chat.id,
+                "⚠️ Платёж сохранён, но параметры "
+                "расклада требуют проверки.\n\n"
+                "Напиши /paysupport.",
+            )
+            return
 
         chosen = cards_from_json(
             existing[6]
@@ -3854,6 +4216,10 @@ def terms(message):
 
 @bot.message_handler(commands=["promo"])
 def promo(message):
+    touch_user(
+        message.from_user.id
+    )
+
     parts = message.text.split(
         maxsplit=1
     )
@@ -3929,6 +4295,97 @@ def support(message):
 
 
 # =========================================================
+# ОТВЕТ ПОДДЕРЖКИ — ТОЛЬКО ВЛАДЕЛЕЦ
+# =========================================================
+
+@bot.message_handler(commands=["reply"])
+def support_reply(message):
+    if (
+        not OWNER_ID
+        or message.from_user.id != OWNER_ID
+    ):
+        return
+
+    parts = message.text.split(
+        maxsplit=2
+    )
+
+    if len(parts) < 3:
+        bot.send_message(
+            message.chat.id,
+            "🛟 Ответ пользователю:\n\n"
+            "/reply НОМЕР_ОБРАЩЕНИЯ текст ответа\n\n"
+            "Например:\n"
+            "/reply 12 Проблему проверили. Попробуй ещё раз.",
+        )
+        return
+
+    ticket_text = parts[1].strip()
+    reply_text = parts[2].strip()
+
+    if not ticket_text.isdigit():
+        bot.send_message(
+            message.chat.id,
+            "❌ Номер обращения должен быть числом.",
+        )
+        return
+
+    ticket_id = int(ticket_text)
+
+    if not reply_text:
+        bot.send_message(
+            message.chat.id,
+            "❌ Напиши текст ответа.",
+        )
+        return
+
+    with db() as conn:
+        ticket = conn.execute("""
+            SELECT
+                user_id,
+                body
+            FROM support_tickets
+            WHERE id = %s
+        """, (
+            ticket_id,
+        )).fetchone()
+
+    if not ticket:
+        bot.send_message(
+            message.chat.id,
+            "❌ Обращение с таким номером не найдено.",
+        )
+        return
+
+    target_user_id = ticket[0]
+
+    try:
+        send_long_message(
+            target_user_id,
+            "🛟 Ответ поддержки\n\n"
+            f"{reply_text}",
+            reply_markup=main_keyboard(),
+        )
+
+        bot.send_message(
+            message.chat.id,
+            f"✅ Ответ на обращение №{ticket_id} отправлен.",
+        )
+
+    except Exception as exc:
+        print(
+            "Ошибка ответа поддержки:",
+            repr(exc),
+            flush=True,
+        )
+
+        bot.send_message(
+            message.chat.id,
+            "⚠️ Не удалось отправить ответ пользователю.",
+        )
+
+
+# =========================================================
 # ТЕСТ ВЛАДЕЛЬЦА
 # =========================================================
 
@@ -3980,20 +4437,35 @@ def testreading(message):
         "🔮 Перемешиваю колоду…",
     )
 
-    result, chosen = spread(
-        kind,
-        test_topic,
-        "near",
-        message.from_user.id,
-    )
+    try:
+        result, chosen = spread(
+            kind,
+            test_topic,
+            "near",
+            message.from_user.id,
+        )
 
-    delivered = send_reading_result(
-        message.chat.id,
-        kind,
-        test_topic,
-        result,
-        chosen,
-    )
+        delivered = send_reading_result(
+            message.chat.id,
+            kind,
+            test_topic,
+            result,
+            chosen,
+        )
+
+    except Exception as exc:
+        print(
+            "Ошибка тестового расклада:",
+            repr(exc),
+            flush=True,
+        )
+        delivered = False
+
+        bot.send_message(
+            message.chat.id,
+            "⚠️ Тестовый расклад завершился ошибкой.\n\n"
+            "Посмотри последние строки Render Logs.",
+        )
 
     print(
         "Тестовый расклад отправлен: "
@@ -4165,6 +4637,13 @@ def other_text(message):
     )
 
     if support_pending:
+        if not text:
+            bot.send_message(
+                chat_id,
+                "🛟 Напиши описание проблемы текстом.",
+            )
+            return
+
         with db() as conn:
             ticket = conn.execute("""
                 INSERT INTO support_tickets (
@@ -4199,10 +4678,17 @@ def other_text(message):
                     OWNER_ID,
                     f"🛟 Обращение №{ticket}\n\n"
                     f"Пользователь: {user_id}\n\n"
-                    f"{text[:3500]}",
+                    f"{text[:3500]}\n\n"
+                    "Для ответа:\n"
+                    f"/reply {ticket} ТЕКСТ",
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                print(
+                    "Не удалось уведомить владельца "
+                    "о новом обращении:",
+                    repr(exc),
+                    flush=True,
+                )
 
         return
 
