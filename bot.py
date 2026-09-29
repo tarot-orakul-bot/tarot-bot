@@ -547,6 +547,24 @@ def init_db():
             ADD COLUMN IF NOT EXISTS amount INTEGER
         """)
 
+        # Сохраняем конкретные карты оплаченного расклада.
+        # Это позволяет повторно доставить тот же самый расклад,
+        # если первая отправка оборвалась после оплаты.
+        conn.execute("""
+            ALTER TABLE payments
+            ADD COLUMN IF NOT EXISTS card_1 TEXT
+        """)
+
+        conn.execute("""
+            ALTER TABLE payments
+            ADD COLUMN IF NOT EXISTS card_2 TEXT
+        """)
+
+        conn.execute("""
+            ALTER TABLE payments
+            ADD COLUMN IF NOT EXISTS card_3 TEXT
+        """)
+
         conn.execute("""
             UPDATE payments
             SET amount = %s
@@ -1037,6 +1055,44 @@ def card_gif_path(card):
     )
 
 
+def find_card_by_gif(gif_filename):
+    if not gif_filename:
+        return None
+
+    for card in CARDS:
+        if card[5] == gif_filename:
+            return card
+
+    return None
+
+
+def restore_payment_cards(
+    card_1,
+    card_2,
+    card_3,
+):
+    filenames = (
+        card_1,
+        card_2,
+        card_3,
+    )
+
+    if not all(filenames):
+        return None
+
+    chosen = []
+
+    for filename in filenames:
+        card = find_card_by_gif(filename)
+
+        if card is None:
+            return None
+
+        chosen.append(card)
+
+    return chosen
+
+
 def send_card_image(
     chat_id,
     card,
@@ -1096,7 +1152,7 @@ def send_card_animation(
                 caption=caption,
             )
 
-        # Показываем переворот один короткий цикл.
+        # Показываем переворот.
         time.sleep(6)
 
         # Убираем зацикленную GIF.
@@ -1150,7 +1206,9 @@ def send_spread_images(
         time.sleep(0.4)
 
     return True
-    # =========================================================
+
+
+# =========================================================
 # ВСПОМОГАТЕЛЬНЫЕ
 # =========================================================
 
@@ -1362,7 +1420,6 @@ def personalized_focus(kind, topic):
 # =========================================================
 # ИИ
 # =========================================================
-
 def build_ai_prompt(
     kind,
     topic,
@@ -3017,20 +3074,46 @@ def payment_success(message):
             SELECT
                 user_id,
                 result,
-                delivered
+                delivered,
+                kind,
+                topic,
+                period,
+                card_1,
+                card_2,
+                card_3
             FROM payments
             WHERE charge_id = %s
         """, (charge_id,)).fetchone()
 
     if existing:
-        if (
-            existing[0] != message.from_user.id
-            or existing[2]
-        ):
+        if existing[0] != message.from_user.id:
+            return
+
+        if existing[2]:
             return
 
         result = existing[1]
-        chosen = None
+
+        # Для повторной доставки используем именно параметры
+        # и карты, которые были сохранены при этом платеже.
+        saved_kind = existing[3]
+        saved_topic = existing[4]
+        saved_period = existing[5]
+
+        if valid_reading_params(
+            saved_kind,
+            saved_topic,
+            saved_period,
+        ):
+            kind = saved_kind
+            topic = saved_topic
+            period = saved_period
+
+        chosen = restore_payment_cards(
+            existing[6],
+            existing[7],
+            existing[8],
+        )
 
     else:
         bot.send_message(
@@ -3056,11 +3139,15 @@ def payment_success(message):
                     delivered,
                     topic,
                     period,
-                    amount
+                    amount,
+                    card_1,
+                    card_2,
+                    card_3
                 )
                 VALUES (
                     %s, %s, %s, %s,
-                    FALSE, %s, %s, %s
+                    FALSE, %s, %s, %s,
+                    %s, %s, %s
                 )
                 ON CONFLICT (charge_id)
                 DO NOTHING
@@ -3072,6 +3159,9 @@ def payment_success(message):
                 topic,
                 period,
                 payment.total_amount,
+                chosen[0][5],
+                chosen[1][5],
+                chosen[2][5],
             ))
 
     try:
@@ -3084,6 +3174,8 @@ def payment_success(message):
                 chosen,
             )
         else:
+            # Совместимость со старыми платежами,
+            # созданными до сохранения карт.
             bot.send_message(
                 message.chat.id,
                 result,
