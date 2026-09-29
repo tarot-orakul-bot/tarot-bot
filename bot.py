@@ -1095,7 +1095,6 @@ def send_card_animation(
                 caption=caption,
             )
 
-        # Оставляем 6 секунд — как ты уже настроил.
         time.sleep(6)
 
         try:
@@ -1226,6 +1225,9 @@ def send_long_message(
         return False
 
 
+# =========================================================
+# КОНЕЦ ЧАСТИ 1/3
+# =========================================================
 # =========================================================
 # ВСПОМОГАТЕЛЬНЫЕ
 # =========================================================
@@ -1479,9 +1481,16 @@ def build_ai_prompt(
 Напиши готовый персонализированный развлекательный расклад Таро
 на естественном современном русском языке.
 
-Верни ТОЛЬКО текст готового расклада.
-Не объясняй правила.
-Не упоминай ИИ, модель, промпт, безопасность или процесс генерации.
+КРИТИЧЕСКИ ВАЖНО:
+Верни ТОЛЬКО готовый текст расклада для пользователя.
+Никаких рассуждений о том, как ты составляешь ответ.
+Никакого анализа задания.
+Никаких служебных комментариев.
+Никаких "thinking process", "analysis", "reasoning",
+"here's a thinking process", "let's craft", "we need to".
+Не пересказывай инструкции и не объясняй структуру ответа.
+Первая строка ответа должна быть ТОЧНО:
+{SPREADS[kind][0]}
 
 ДАННЫЕ:
 {profile_text}
@@ -1538,7 +1547,7 @@ def build_ai_prompt(
 должны присутствовать в ответе.
 
 17. Желаемый объём: примерно 1200–2200 символов.
-Главное — закончить весь расклад полностью.
+Не растягивай ответ служебным текстом.
 
 СТРУКТУРА:
 
@@ -1577,12 +1586,91 @@ def build_ai_prompt(
 
 Один конкретный вопрос.
 
-Начинай сразу с:
+Ещё раз: не показывай анализ или процесс рассуждения.
+Начни ответ сразу с точной строки:
 {SPREADS[kind][0]}
 """.strip()
 
 
-def validate_ai_response(content, chosen):
+def clean_ai_response(content, kind):
+    if not isinstance(content, str):
+        return None
+
+    cleaned = content.strip()
+
+    if not cleaned:
+        return None
+
+    # Убираем случайные Markdown-ограждения.
+    if cleaned.startswith("```"):
+        first_newline = cleaned.find("\n")
+
+        if first_newline != -1:
+            cleaned = cleaned[
+                first_newline + 1:
+            ].strip()
+
+    if cleaned.endswith("```"):
+        cleaned = cleaned[:-3].strip()
+
+    expected_title = SPREADS[kind][0]
+
+    # Некоторые бесплатные модели сначала печатают
+    # собственный анализ, а уже потом готовый расклад.
+    # Берём начало ПОСЛЕДНЕГО вхождения заголовка,
+    # чтобы не захватить заголовок, процитированный
+    # внутри служебного рассуждения.
+    title_position = cleaned.rfind(
+        expected_title
+    )
+
+    if title_position == -1:
+        return cleaned
+
+    cleaned = cleaned[
+        title_position:
+    ].strip()
+
+    # Если модель после готового ответа снова начала
+    # печатать служебные рассуждения, отсекаем хвост.
+    trailing_markers = (
+        "\nHere's a thinking process",
+        "\nHere is a thinking process",
+        "\nThinking process:",
+        "\nAnalysis:",
+        "\nReasoning:",
+        "\nLet's analyze",
+        "\nLet's craft",
+        "\nWe need to",
+    )
+
+    lower = cleaned.lower()
+    cut_positions = []
+
+    for marker in trailing_markers:
+        position = lower.find(
+            marker.lower(),
+            1,
+        )
+
+        if position != -1:
+            cut_positions.append(
+                position
+            )
+
+    if cut_positions:
+        cleaned = cleaned[
+            :min(cut_positions)
+        ].strip()
+
+    return cleaned or None
+
+
+def validate_ai_response(
+    content,
+    chosen,
+    kind,
+):
     if not isinstance(content, str):
         return False, "empty"
 
@@ -1591,13 +1679,39 @@ def validate_ai_response(content, chosen):
     if not cleaned:
         return False, "empty"
 
-    # Не принимаем совсем короткий обрывок.
-    if len(cleaned) < 650:
+    expected_title = SPREADS[kind][0]
+
+    # Ответ обязан начинаться с готового расклада.
+    if not cleaned.startswith(
+        expected_title
+    ):
+        return False, "wrong_start"
+
+    # Отсекаем как обрывки, так и подозрительно
+    # огромные ответы со служебными рассуждениями.
+    if len(cleaned) < 700:
         return False, "too_short"
+
+    if len(cleaned) > 5000:
+        return False, "too_long"
 
     lower = cleaned.lower()
 
     bad_phrases = (
+        "here's a thinking process",
+        "here is a thinking process",
+        "thinking process:",
+        "analysis:",
+        "reasoning:",
+        "let's analyze",
+        "let's craft",
+        "we need to",
+        "analyze user input",
+        "user input:",
+        "role:",
+        "constraints:",
+        "requirements:",
+        "safety:",
         "user safety:",
         "safety: safe",
         "safety classification",
@@ -1605,8 +1719,15 @@ def validate_ai_response(content, chosen):
         "content safety classification",
         "policy violation",
         "request classification",
+        "system prompt",
+        "developer message",
         "as an ai",
         "as a language model",
+        "языковая модель",
+        "процесс рассуждения",
+        "анализ запроса",
+        "разберём запрос",
+        "инструкции пользователя",
         "я не могу выполнить",
         "я не могу предоставить",
     )
@@ -1641,9 +1762,9 @@ def validate_ai_response(content, chosen):
         "1️⃣",
         "2️⃣",
         "3️⃣",
-        "как карты связаны",
-        "общий итог",
-        "над чем подумать",
+        "🔗 как карты связаны",
+        "🔮 общий итог",
+        "💭 над чем подумать",
     )
 
     for marker in required_sections:
@@ -1717,9 +1838,12 @@ def request_openrouter(prompt):
                         "Ты пишешь качественные "
                         "развлекательные расклады Таро "
                         "на русском языке. "
+                        "Возвращай только готовый текст "
+                        "для пользователя. "
+                        "Никогда не показывай анализ, reasoning, "
+                        "thinking process, внутренние рассуждения "
+                        "или пересказ инструкций. "
                         "Ответ должен быть полностью закончен. "
-                        "Никогда не обрывай расклад после одной "
-                        "или двух карт. "
                         "Обязательно раскрой все три карты, "
                         "их взаимосвязь, общий итог "
                         "и финальный вопрос. "
@@ -1729,8 +1853,7 @@ def request_openrouter(prompt):
                         "чувства или намерения. "
                         "Не делай гарантированных предсказаний. "
                         "Карты трактуй как символические темы "
-                        "и возможные ракурсы. "
-                        "Верни только готовый расклад."
+                        "и возможные ракурсы."
                     ),
                 },
                 {
@@ -1738,16 +1861,10 @@ def request_openrouter(prompt):
                     "content": prompt,
                 },
             ],
-            "temperature": 0.65,
-
-            # Было 1400. Даём модели больше места,
-            # чтобы она не обрывала полный расклад.
-            "max_tokens": 2200,
+            "temperature": 0.55,
+            "max_tokens": 1200,
         },
-
-        # Было 25 секунд.
-        # Бесплатные модели OpenRouter иногда отвечают дольше.
-        timeout=60,
+        timeout=30,
     )
 
     response.raise_for_status()
@@ -1771,27 +1888,13 @@ def request_openrouter(prompt):
         or {}
     )
 
-    content = extract_openrouter_content(
+    # ВАЖНО:
+    # пользователю отправляем только content.
+    # Поля reasoning/reasoning_content никогда
+    # не используем как готовый ответ.
+    return extract_openrouter_content(
         message.get("content")
     )
-
-    if content:
-        return content
-
-    # Некоторые маршруты могут вернуть текст
-    # не в обычном content. Проверяем запасные поля.
-    for field in (
-        "reasoning",
-        "reasoning_content",
-    ):
-        alternate = extract_openrouter_content(
-            message.get(field)
-        )
-
-        if alternate:
-            return alternate
-
-    return None
 
 
 def ai_tarot_reading(
@@ -1816,19 +1919,22 @@ def ai_tarot_reading(
         user_id,
     )
 
-    # Было две попытки.
-    # Бесплатный маршрутизатор иногда отдаёт пустой ответ,
-    # поэтому делаем до четырёх попыток.
-    for attempt in range(4):
+    for attempt in range(2):
         try:
-            content = request_openrouter(
+            raw_content = request_openrouter(
                 prompt
+            )
+
+            content = clean_ai_response(
+                raw_content,
+                kind,
             )
 
             valid, reason = (
                 validate_ai_response(
                     content,
                     chosen,
+                    kind,
                 )
             )
 
@@ -1836,7 +1942,8 @@ def ai_tarot_reading(
                 print(
                     "OpenRouter: качественный ответ, "
                     f"попытка {attempt + 1}, "
-                    f"длина {len(content)} символов",
+                    f"raw={len(raw_content) if raw_content else 0}, "
+                    f"clean={len(content)} символов",
                     flush=True,
                 )
 
@@ -1846,7 +1953,9 @@ def ai_tarot_reading(
                 "OpenRouter: ответ отклонён, "
                 f"попытка {attempt + 1}, "
                 f"причина: {reason}, "
-                f"длина: "
+                f"raw: "
+                f"{len(raw_content) if raw_content else 0}, "
+                f"clean: "
                 f"{len(content) if content else 0}",
                 flush=True,
             )
@@ -1880,20 +1989,19 @@ def ai_tarot_reading(
                 flush=True,
             )
 
-        if attempt < 3:
-            # Небольшая пауза перед новым маршрутом/попыткой.
-            time.sleep(
-                0.8 + attempt * 0.5
-            )
+        if attempt < 1:
+            time.sleep(1)
 
     print(
-        "OpenRouter: все попытки исчерпаны. "
+        "OpenRouter: качественный ответ не получен. "
         "Использую встроенный резервный расклад.",
         flush=True,
     )
 
     return None
-    # =========================================================
+
+
+# =========================================================
 # РАСКЛАД
 # =========================================================
 
@@ -2590,6 +2698,9 @@ def invoice_details(
     )
 
 
+# =========================================================
+# КОНЕЦ ЧАСТИ 2/3
+# =========================================================
 # =========================================================
 # START
 # =========================================================
@@ -3388,8 +3499,6 @@ def payment_success(message):
         payment.telegram_payment_charge_id
     )
 
-    # Сначала проверяем, не обрабатывали ли
-    # мы уже этот платёж.
     with db() as conn:
         existing = conn.execute("""
             SELECT
@@ -3407,8 +3516,6 @@ def payment_success(message):
         )).fetchone()
 
     if existing:
-        # Один charge_id не может использоваться
-        # другим пользователем.
         if existing[0] != message.from_user.id:
             print(
                 "Платёж принадлежит другому user_id:",
@@ -3417,8 +3524,6 @@ def payment_success(message):
             )
             return
 
-        # Если результат уже полностью отправлен,
-        # повторный Telegram update ничего не делает.
         if existing[3]:
             print(
                 "Повторный successful_payment "
@@ -3453,10 +3558,6 @@ def payment_success(message):
         topic = stored_topic
         period = stored_period
 
-        # Старые записи могли появиться до того,
-        # как мы начали сохранять карты.
-        # Для такой записи создаём карты один раз
-        # и сразу сохраняем их.
         if not chosen:
             chosen = random.sample(
                 CARDS,
@@ -3492,9 +3593,6 @@ def payment_success(message):
                     charge_id,
                 ))
 
-        # Если старая незавершённая запись
-        # почему-либо не содержит текста,
-        # восстанавливаем его с теми же картами.
         if not result or not result.strip():
             result, chosen = spread(
                 kind,
@@ -3503,6 +3601,19 @@ def payment_success(message):
                 message.from_user.id,
                 chosen=chosen,
             )
+
+            indices = card_indices(
+                chosen
+            )
+
+            if indices is None:
+                bot.send_message(
+                    message.chat.id,
+                    "⚠️ Не удалось восстановить "
+                    "оплаченный расклад.\n\n"
+                    "Напиши /paysupport.",
+                )
+                return
 
             with db() as conn:
                 conn.execute("""
@@ -3517,9 +3628,7 @@ def payment_success(message):
                       AND delivered = FALSE
                 """, (
                     result,
-                    json.dumps(
-                        card_indices(chosen)
-                    ),
+                    json.dumps(indices),
                     topic,
                     period,
                     payment.total_amount,
@@ -3540,13 +3649,11 @@ def payment_success(message):
             "твой расклад…",
         )
 
-        # Карты выбираются только один раз.
         chosen = random.sample(
             CARDS,
             3,
         )
 
-        # Получаем текст для тех же самых карт.
         result, chosen = spread(
             kind,
             topic,
@@ -3568,11 +3675,6 @@ def payment_success(message):
             )
             return
 
-        # ВАЖНО:
-        # сохраняем и текст, и конкретные карты
-        # ДО начала отправки пользователю.
-        # Поэтому при проблеме доставки результат
-        # можно восстановить без нового расклада.
         with db() as conn:
             conn.execute("""
                 INSERT INTO payments (
@@ -3611,8 +3713,6 @@ def payment_success(message):
                 json.dumps(indices),
             ))
 
-        # На случай крайне редкой гонки:
-        # перечитываем сохранённую запись.
         with db() as conn:
             stored = conn.execute("""
                 SELECT
@@ -3671,9 +3771,6 @@ def payment_success(message):
         if restored_cards:
             chosen = restored_cards
 
-    # Отправляем сохранённый расклад.
-    # delivered станет TRUE только после того,
-    # как успешно отправятся и карты, и текст.
     try:
         delivered = send_reading_result(
             message.chat.id,
@@ -3711,8 +3808,6 @@ def payment_success(message):
 
         return
 
-    # Только после полной доставки отмечаем
-    # платёж как доставленный.
     with db() as conn:
         conn.execute("""
             UPDATE payments
@@ -4333,3 +4428,8 @@ if __name__ == "__main__":
             )
         ),
     )
+
+
+# =========================================================
+# КОНЕЦ ЧАСТИ 3/3
+# =========================================================
