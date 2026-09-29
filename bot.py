@@ -1159,7 +1159,7 @@ def valid_reading_params(kind, topic, period):
         and topic in TOPICS.get(kind, {})
         and period in PERIODS
     )
-    def reading_positions(kind, topic):
+def reading_positions(kind, topic):
     positions = {
         "love": {
             "current": (
