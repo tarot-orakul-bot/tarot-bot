@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import json
 import os
 import queue
 import random
@@ -532,38 +533,18 @@ def init_db():
             )
         """)
 
-        conn.execute("""
-            ALTER TABLE payments
-            ADD COLUMN IF NOT EXISTS topic TEXT
-        """)
+        payment_columns = [
+            "ADD COLUMN IF NOT EXISTS topic TEXT",
+            "ADD COLUMN IF NOT EXISTS period TEXT",
+            "ADD COLUMN IF NOT EXISTS amount INTEGER",
+            "ADD COLUMN IF NOT EXISTS cards_json TEXT",
+            "ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()",
+        ]
 
-        conn.execute("""
-            ALTER TABLE payments
-            ADD COLUMN IF NOT EXISTS period TEXT
-        """)
-
-        conn.execute("""
-            ALTER TABLE payments
-            ADD COLUMN IF NOT EXISTS amount INTEGER
-        """)
-
-        # Сохраняем конкретные карты оплаченного расклада.
-        # Это позволяет повторно доставить тот же самый расклад,
-        # если первая отправка оборвалась после оплаты.
-        conn.execute("""
-            ALTER TABLE payments
-            ADD COLUMN IF NOT EXISTS card_1 TEXT
-        """)
-
-        conn.execute("""
-            ALTER TABLE payments
-            ADD COLUMN IF NOT EXISTS card_2 TEXT
-        """)
-
-        conn.execute("""
-            ALTER TABLE payments
-            ADD COLUMN IF NOT EXISTS card_3 TEXT
-        """)
+        for column in payment_columns:
+            conn.execute(
+                f"ALTER TABLE payments {column}"
+            )
 
         conn.execute("""
             UPDATE payments
@@ -1055,44 +1036,6 @@ def card_gif_path(card):
     )
 
 
-def find_card_by_gif(gif_filename):
-    if not gif_filename:
-        return None
-
-    for card in CARDS:
-        if card[5] == gif_filename:
-            return card
-
-    return None
-
-
-def restore_payment_cards(
-    card_1,
-    card_2,
-    card_3,
-):
-    filenames = (
-        card_1,
-        card_2,
-        card_3,
-    )
-
-    if not all(filenames):
-        return None
-
-    chosen = []
-
-    for filename in filenames:
-        card = find_card_by_gif(filename)
-
-        if card is None:
-            return None
-
-        chosen.append(card)
-
-    return chosen
-
-
 def send_card_image(
     chat_id,
     card,
@@ -1152,10 +1095,8 @@ def send_card_animation(
                 caption=caption,
             )
 
-        # Показываем переворот.
         time.sleep(6)
 
-        # Убираем зацикленную GIF.
         try:
             bot.delete_message(
                 chat_id,
@@ -1167,7 +1108,6 @@ def send_card_animation(
                 flush=True,
             )
 
-        # После переворота оставляем открытую карту.
         return send_card_image(
             chat_id,
             card,
@@ -1193,8 +1133,10 @@ def send_spread_images(
     chosen,
     positions,
 ):
+    success = True
+
     for index, card in enumerate(chosen):
-        send_card_animation(
+        card_sent = send_card_animation(
             chat_id,
             card,
             caption=(
@@ -1203,9 +1145,84 @@ def send_spread_images(
             ),
         )
 
+        if not card_sent:
+            success = False
+
         time.sleep(0.4)
 
-    return True
+    return success
+
+
+def send_long_message(
+    chat_id,
+    text,
+    reply_markup=None,
+):
+    if not isinstance(text, str):
+        text = str(text)
+
+    text = text.strip()
+
+    if not text:
+        return False
+
+    max_length = 3900
+    parts = []
+
+    while len(text) > max_length:
+        split_at = text.rfind(
+            "\n\n",
+            0,
+            max_length,
+        )
+
+        if split_at < 1000:
+            split_at = text.rfind(
+                "\n",
+                0,
+                max_length,
+            )
+
+        if split_at < 1000:
+            split_at = text.rfind(
+                " ",
+                0,
+                max_length,
+            )
+
+        if split_at < 1:
+            split_at = max_length
+
+        parts.append(
+            text[:split_at].strip()
+        )
+
+        text = text[split_at:].strip()
+
+    if text:
+        parts.append(text)
+
+    try:
+        for index, part in enumerate(parts):
+            bot.send_message(
+                chat_id,
+                part,
+                reply_markup=(
+                    reply_markup
+                    if index == len(parts) - 1
+                    else None
+                ),
+            )
+
+        return True
+
+    except Exception as exc:
+        print(
+            "Ошибка отправки текста:",
+            repr(exc),
+            flush=True,
+        )
+        return False
 
 
 # =========================================================
@@ -1773,6 +1790,7 @@ def spread(
     topic=None,
     period=None,
     user_id=None,
+    chosen=None,
 ):
     if topic not in TOPICS.get(kind, {}):
         topic = next(iter(TOPICS[kind]))
@@ -1782,10 +1800,11 @@ def spread(
 
     positions = reading_positions(kind, topic)
 
-    chosen = random.sample(
-        CARDS,
-        3,
-    )
+    if chosen is None:
+        chosen = random.sample(
+            CARDS,
+            3,
+        )
 
     ai_result = ai_tarot_reading(
         kind,
@@ -1899,6 +1918,54 @@ def spread(
     return "\n\n".join(lines), chosen
 
 
+def card_indices(chosen):
+    indices = []
+
+    for card in chosen:
+        try:
+            indices.append(CARDS.index(card))
+        except ValueError:
+            return None
+
+    return indices
+
+
+def cards_from_json(cards_json):
+    if not cards_json:
+        return None
+
+    try:
+        indices = json.loads(cards_json)
+
+        if (
+            not isinstance(indices, list)
+            or len(indices) != 3
+        ):
+            return None
+
+        chosen = []
+
+        for index in indices:
+            if (
+                not isinstance(index, int)
+                or index < 0
+                or index >= len(CARDS)
+            ):
+                return None
+
+            chosen.append(CARDS[index])
+
+        return chosen
+
+    except Exception as exc:
+        print(
+            "Ошибка восстановления карт:",
+            repr(exc),
+            flush=True,
+        )
+        return None
+
+
 def send_reading_result(
     chat_id,
     kind,
@@ -1911,16 +1978,32 @@ def send_reading_result(
         topic,
     )
 
-    send_spread_images(
+    images_sent = send_spread_images(
         chat_id,
         chosen,
         positions,
     )
 
-    bot.send_message(
+    if not images_sent:
+        print(
+            "Не все изображения расклада отправлены",
+            flush=True,
+        )
+        return False
+
+    text_sent = send_long_message(
         chat_id,
         result,
     )
+
+    if not text_sent:
+        print(
+            "Текст расклада не отправлен",
+            flush=True,
+        )
+        return False
+
+    return True
 
 
 # =========================================================
@@ -2397,7 +2480,7 @@ def card_of_the_day(message):
         caption=f"🔮 {card[0]}",
     )
 
-    bot.send_message(
+    send_long_message(
         message.chat.id,
         day_card_text(card),
     )
@@ -2428,7 +2511,7 @@ def question_of_the_day(message):
         caption=f"❓ {card[0]}",
     )
 
-    bot.send_message(
+    send_long_message(
         message.chat.id,
         question_text(card),
     )
@@ -3064,23 +3147,18 @@ def payment_success(message):
         return
 
     kind, topic, period = details
-
-    charge_id = (
-        payment.telegram_payment_charge_id
-    )
+    charge_id = payment.telegram_payment_charge_id
 
     with db() as conn:
         existing = conn.execute("""
             SELECT
                 user_id,
+                kind,
                 result,
                 delivered,
-                kind,
                 topic,
                 period,
-                card_1,
-                card_2,
-                card_3
+                cards_json
             FROM payments
             WHERE charge_id = %s
         """, (charge_id,)).fetchone()
@@ -3089,31 +3167,48 @@ def payment_success(message):
         if existing[0] != message.from_user.id:
             return
 
-        if existing[2]:
+        if existing[3]:
             return
 
-        result = existing[1]
+        stored_kind = existing[1] or kind
+        result = existing[2]
+        stored_topic = existing[4] or topic
+        stored_period = existing[5] or period
+        chosen = cards_from_json(existing[6])
 
-        # Для повторной доставки используем именно параметры
-        # и карты, которые были сохранены при этом платеже.
-        saved_kind = existing[3]
-        saved_topic = existing[4]
-        saved_period = existing[5]
+        if not chosen:
+            print(
+                "Оплаченный расклад найден без сохранённых карт. "
+                "Создаю и сохраняю карты для восстановления.",
+                flush=True,
+            )
 
-        if valid_reading_params(
-            saved_kind,
-            saved_topic,
-            saved_period,
-        ):
-            kind = saved_kind
-            topic = saved_topic
-            period = saved_period
+            chosen = random.sample(
+                CARDS,
+                3,
+            )
 
-        chosen = restore_payment_cards(
-            existing[6],
-            existing[7],
-            existing[8],
-        )
+            indices = card_indices(chosen)
+
+            with db() as conn:
+                conn.execute("""
+                    UPDATE payments
+                    SET
+                        cards_json = %s,
+                        topic = COALESCE(topic, %s),
+                        period = COALESCE(period, %s)
+                    WHERE charge_id = %s
+                      AND delivered = FALSE
+                """, (
+                    json.dumps(indices),
+                    stored_topic,
+                    stored_period,
+                    charge_id,
+                ))
+
+        kind = stored_kind
+        topic = stored_topic
+        period = stored_period
 
     else:
         bot.send_message(
@@ -3122,12 +3217,20 @@ def payment_success(message):
             "🔮 Перемешиваю колоду и готовлю твой расклад…",
         )
 
+        chosen = random.sample(
+            CARDS,
+            3,
+        )
+
         result, chosen = spread(
             kind,
             topic,
             period,
             message.from_user.id,
+            chosen=chosen,
         )
+
+        indices = card_indices(chosen)
 
         with db() as conn:
             conn.execute("""
@@ -3140,14 +3243,11 @@ def payment_success(message):
                     topic,
                     period,
                     amount,
-                    card_1,
-                    card_2,
-                    card_3
+                    cards_json
                 )
                 VALUES (
                     %s, %s, %s, %s,
-                    FALSE, %s, %s, %s,
-                    %s, %s, %s
+                    FALSE, %s, %s, %s, %s
                 )
                 ON CONFLICT (charge_id)
                 DO NOTHING
@@ -3159,27 +3259,17 @@ def payment_success(message):
                 topic,
                 period,
                 payment.total_amount,
-                chosen[0][5],
-                chosen[1][5],
-                chosen[2][5],
+                json.dumps(indices),
             ))
 
     try:
-        if chosen:
-            send_reading_result(
-                message.chat.id,
-                kind,
-                topic,
-                result,
-                chosen,
-            )
-        else:
-            # Совместимость со старыми платежами,
-            # созданными до сохранения карт.
-            bot.send_message(
-                message.chat.id,
-                result,
-            )
+        delivered = send_reading_result(
+            message.chat.id,
+            kind,
+            topic,
+            result,
+            chosen,
+        )
 
     except Exception as exc:
         print(
@@ -3187,6 +3277,25 @@ def payment_success(message):
             repr(exc),
             flush=True,
         )
+        delivered = False
+
+    if not delivered:
+        print(
+            f"Оплаченный расклад {charge_id} "
+            "оставлен со статусом delivered=FALSE",
+            flush=True,
+        )
+
+        try:
+            bot.send_message(
+                message.chat.id,
+                "⚠️ Не удалось полностью отправить расклад.\n\n"
+                "Платёж сохранён. Если результат не пришёл полностью, "
+                "напиши /paysupport.",
+            )
+        except Exception:
+            pass
+
         return
 
     with db() as conn:
@@ -3343,12 +3452,17 @@ def testreading(message):
         message.from_user.id,
     )
 
-    send_reading_result(
+    delivered = send_reading_result(
         message.chat.id,
         kind,
         test_topic,
         result,
         chosen,
+    )
+
+    print(
+        f"Тестовый расклад отправлен: {delivered}",
+        flush=True,
     )
 
 
@@ -3455,7 +3569,7 @@ def reminder_get_card(call):
         caption=f"🔮 {card[0]}",
     )
 
-    bot.send_message(
+    send_long_message(
         call.message.chat.id,
         day_card_text(card),
         reply_markup=main_keyboard(),
