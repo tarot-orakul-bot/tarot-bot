@@ -1095,6 +1095,7 @@ def send_card_animation(
                 caption=caption,
             )
 
+        # Оставляем 6 секунд — как ты уже настроил.
         time.sleep(6)
 
         try:
@@ -1437,6 +1438,7 @@ def personalized_focus(kind, topic):
 # =========================================================
 # ИИ
 # =========================================================
+
 def build_ai_prompt(
     kind,
     topic,
@@ -1492,16 +1494,15 @@ def build_ai_prompt(
 ВАЖНО:
 
 1. Напиши ПОЛНЫЙ расклад.
-Не сокращай ответ до нескольких предложений.
 Каждой из трёх карт посвяти отдельный содержательный абзац.
-После этого обязательно напиши связь карт, общий итог и вопрос.
+После трёх карт обязательно напиши связь карт, общий итог
+и один практичный вопрос.
 
 2. Ты знаешь о людях только имя и возраст.
 Не придумывай их характер, чувства, поступки, прошлое,
 отношения, работу, намерения или жизненные обстоятельства.
 
-3. Имя и возраст используются только для естественной персонализации.
-Они не являются основанием для психологических выводов.
+3. Имя и возраст используй только для естественной персонализации.
 
 4. Значение карты описывай как символическую тему,
 возможный ракурс или повод задуматься.
@@ -1511,25 +1512,24 @@ def build_ai_prompt(
 
 6. Не утверждай неизвестные факты об отношениях.
 
-7. Будущее описывай только как возможное направление,
+7. Будущее описывай как возможное направление,
 а не как гарантированное событие.
 
 8. Не определяй пол по имени.
 
 9. Пиши естественным русским языком.
 
-10. Не повторяй постоянно одинаковые конструкции.
+10. Не повторяй одни и те же фразы.
 
 11. Каждую карту связывай именно с её позицией.
 
 12. В разделе «Как карты связаны» объясни взаимодействие
-ИМЕННО этих трёх карт.
+ИМЕННО выпавших трёх карт, а не давай общий шаблон.
 
-13. В «Общем итоге» сделай конкретный вывод
-из сочетания этих трёх карт, но не превращай его
-в утверждение о неизвестных фактах.
+13. В разделе «Общий итог» сделай конкретный вывод
+из сочетания этих трёх карт, сохраняя символический характер расклада.
 
-14. Последний вопрос должен быть практичным.
+14. Последний вопрос должен быть коротким и практичным.
 
 15. Не давай медицинских, юридических или конкретных
 инвестиционных рекомендаций.
@@ -1537,10 +1537,10 @@ def build_ai_prompt(
 16. Все ТРИ точных названия выпавших карт обязательно
 должны присутствовать в ответе.
 
-17. Обязательный объём:
-ориентируйся примерно на 1400–2400 символов.
+17. Желаемый объём: примерно 1200–2200 символов.
+Главное — закончить весь расклад полностью.
 
-СТРУКТУРА ОБЯЗАТЕЛЬНА:
+СТРУКТУРА:
 
 {SPREADS[kind][0]}
 
@@ -1551,31 +1551,31 @@ def build_ai_prompt(
 
 {chosen[0][0]}
 
-Содержательная интерпретация этой карты именно в данной позиции.
+Интерпретация.
 
 2️⃣ {positions[1]}
 
 {chosen[1][0]}
 
-Содержательная интерпретация этой карты именно в данной позиции.
+Интерпретация.
 
 3️⃣ {positions[2]}
 
 {chosen[2][0]}
 
-Содержательная интерпретация этой карты именно в данной позиции.
+Интерпретация.
 
 🔗 Как карты связаны
 
-Объясни единый сюжет именно этих трёх карт.
+Связь именно этих трёх карт.
 
 🔮 Общий итог
 
-Свяжи именно эти три карты с выбранной темой.
+Конкретный общий смысл сочетания.
 
 💭 Над чем подумать
 
-Один короткий конкретный вопрос.
+Один конкретный вопрос.
 
 Начинай сразу с:
 {SPREADS[kind][0]}
@@ -1591,7 +1591,8 @@ def validate_ai_response(content, chosen):
     if not cleaned:
         return False, "empty"
 
-    if len(cleaned) < 450:
+    # Не принимаем совсем короткий обрывок.
+    if len(cleaned) < 650:
         return False, "too_short"
 
     lower = cleaned.lower()
@@ -1610,12 +1611,19 @@ def validate_ai_response(content, chosen):
         "я не могу предоставить",
     )
 
-    if any(phrase in lower for phrase in bad_phrases):
+    if any(
+        phrase in lower
+        for phrase in bad_phrases
+    ):
         return False, "service_output"
 
     for card in chosen:
         card_name = card[0]
-        parts = card_name.split(" ", maxsplit=1)
+
+        parts = card_name.split(
+            " ",
+            maxsplit=1,
+        )
 
         plain_name = (
             parts[1]
@@ -1624,7 +1632,10 @@ def validate_ai_response(content, chosen):
         )
 
         if plain_name.lower() not in lower:
-            return False, f"missing_card:{plain_name}"
+            return (
+                False,
+                f"missing_card:{plain_name}",
+            )
 
     required_sections = (
         "1️⃣",
@@ -1637,7 +1648,10 @@ def validate_ai_response(content, chosen):
 
     for marker in required_sections:
         if marker not in lower:
-            return False, f"missing_section:{marker}"
+            return (
+                False,
+                f"missing_section:{marker}",
+            )
 
     return True, "ok"
 
@@ -1645,7 +1659,12 @@ def validate_ai_response(content, chosen):
 def extract_openrouter_content(content):
     if isinstance(content, str):
         cleaned = content.strip()
-        return cleaned if cleaned else None
+
+        return (
+            cleaned
+            if cleaned
+            else None
+        )
 
     if isinstance(content, list):
         text_parts = []
@@ -1657,8 +1676,13 @@ def extract_openrouter_content(content):
             elif isinstance(part, dict):
                 part_text = part.get("text")
 
-                if isinstance(part_text, str):
-                    text_parts.append(part_text)
+                if isinstance(
+                    part_text,
+                    str,
+                ):
+                    text_parts.append(
+                        part_text
+                    )
 
         combined = "\n".join(
             part.strip()
@@ -1666,7 +1690,11 @@ def extract_openrouter_content(content):
             if part.strip()
         ).strip()
 
-        return combined if combined else None
+        return (
+            combined
+            if combined
+            else None
+        )
 
     return None
 
@@ -1675,8 +1703,10 @@ def request_openrouter(prompt):
     response = requests.post(
         "https://openrouter.ai/api/v1/chat/completions",
         headers={
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json",
+            "Authorization":
+                f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type":
+                "application/json",
         },
         json={
             "model": OPENROUTER_MODEL,
@@ -1684,21 +1714,23 @@ def request_openrouter(prompt):
                 {
                     "role": "system",
                     "content": (
-                        "Ты профессиональный русскоязычный редактор "
-                        "развлекательных раскладов Таро. "
-                        "Пиши только полный готовый расклад. "
-                        "Не сокращай ответ. "
-                        "Обязательно раскрой все три карты, их взаимосвязь, "
-                        "общий итог и финальный вопрос. "
+                        "Ты пишешь качественные "
+                        "развлекательные расклады Таро "
+                        "на русском языке. "
+                        "Ответ должен быть полностью закончен. "
+                        "Никогда не обрывай расклад после одной "
+                        "или двух карт. "
+                        "Обязательно раскрой все три карты, "
+                        "их взаимосвязь, общий итог "
+                        "и финальный вопрос. "
                         "Не придумывай факты о пользователе "
                         "или другом человеке. "
-                        "Не делай выводы о характере, чувствах, поведении "
-                        "или прошлом из имени и возраста. "
-                        "Не утверждай, что знаешь чужие мысли или чувства. "
+                        "Не утверждай, что знаешь чужие мысли, "
+                        "чувства или намерения. "
                         "Не делай гарантированных предсказаний. "
                         "Карты трактуй как символические темы "
                         "и возможные ракурсы. "
-                        "Пиши естественным грамотным русским языком."
+                        "Верни только готовый расклад."
                     ),
                 },
                 {
@@ -1706,25 +1738,60 @@ def request_openrouter(prompt):
                     "content": prompt,
                 },
             ],
-            "temperature": 0.60,
-            "max_tokens": 1400,
+            "temperature": 0.65,
+
+            # Было 1400. Даём модели больше места,
+            # чтобы она не обрывала полный расклад.
+            "max_tokens": 2200,
         },
-        timeout=25,
+
+        # Было 25 секунд.
+        # Бесплатные модели OpenRouter иногда отвечают дольше.
+        timeout=60,
     )
 
     response.raise_for_status()
 
     data = response.json()
-    choices = data.get("choices") or []
+
+    choices = (
+        data.get("choices")
+        or []
+    )
 
     if not choices:
+        print(
+            "OpenRouter: choices отсутствует",
+            flush=True,
+        )
         return None
 
-    message = choices[0].get("message") or {}
+    message = (
+        choices[0].get("message")
+        or {}
+    )
 
-    return extract_openrouter_content(
+    content = extract_openrouter_content(
         message.get("content")
     )
+
+    if content:
+        return content
+
+    # Некоторые маршруты могут вернуть текст
+    # не в обычном content. Проверяем запасные поля.
+    for field in (
+        "reasoning",
+        "reasoning_content",
+    ):
+        alternate = extract_openrouter_content(
+            message.get(field)
+        )
+
+        if alternate:
+            return alternate
+
+    return None
 
 
 def ai_tarot_reading(
@@ -1735,6 +1802,10 @@ def ai_tarot_reading(
     user_id,
 ):
     if not OPENROUTER_API_KEY:
+        print(
+            "OpenRouter: OPENROUTER_API_KEY отсутствует",
+            flush=True,
+        )
         return None
 
     prompt = build_ai_prompt(
@@ -1745,26 +1816,59 @@ def ai_tarot_reading(
         user_id,
     )
 
-    for attempt in range(2):
+    # Было две попытки.
+    # Бесплатный маршрутизатор иногда отдаёт пустой ответ,
+    # поэтому делаем до четырёх попыток.
+    for attempt in range(4):
         try:
-            content = request_openrouter(prompt)
+            content = request_openrouter(
+                prompt
+            )
 
-            valid, reason = validate_ai_response(
-                content,
-                chosen,
+            valid, reason = (
+                validate_ai_response(
+                    content,
+                    chosen,
+                )
             )
 
             if valid:
                 print(
                     "OpenRouter: качественный ответ, "
-                    f"попытка {attempt + 1}",
+                    f"попытка {attempt + 1}, "
+                    f"длина {len(content)} символов",
                     flush=True,
                 )
+
                 return content
 
             print(
                 "OpenRouter: ответ отклонён, "
-                f"причина: {reason}",
+                f"попытка {attempt + 1}, "
+                f"причина: {reason}, "
+                f"длина: "
+                f"{len(content) if content else 0}",
+                flush=True,
+            )
+
+        except requests.Timeout:
+            print(
+                "OpenRouter: превышено время ожидания, "
+                f"попытка {attempt + 1}",
+                flush=True,
+            )
+
+        except requests.HTTPError as exc:
+            status_code = (
+                exc.response.status_code
+                if exc.response is not None
+                else "unknown"
+            )
+
+            print(
+                "OpenRouter HTTP ошибка: "
+                f"{status_code}, "
+                f"попытка {attempt + 1}",
                 flush=True,
             )
 
@@ -1772,16 +1876,24 @@ def ai_tarot_reading(
             print(
                 "OpenRouter ошибка:",
                 repr(exc),
+                f"попытка {attempt + 1}",
                 flush=True,
             )
 
-        if attempt == 0:
-            time.sleep(0.3)
+        if attempt < 3:
+            # Небольшая пауза перед новым маршрутом/попыткой.
+            time.sleep(
+                0.8 + attempt * 0.5
+            )
+
+    print(
+        "OpenRouter: все попытки исчерпаны. "
+        "Использую встроенный резервный расклад.",
+        flush=True,
+    )
 
     return None
-
-
-# =========================================================
+    # =========================================================
 # РАСКЛАД
 # =========================================================
 
@@ -1894,25 +2006,25 @@ def spread(
         "🔗 Как карты связаны\n\n"
         f"{names[0]}, {names[1]} и {names[2]} "
         "создают общий символический сюжет расклада. "
-        "Первая карта задаёт один аспект ситуации, "
-        "вторая добавляет к нему новый ракурс, "
-        "а третья показывает, на что особенно полезно "
-        "обратить внимание."
+        "Первая карта задаёт исходную тему, "
+        "вторая показывает, как эта тема развивается "
+        "в текущей позиции, а третья добавляет направление, "
+        "на которое особенно полезно обратить внимание."
     )
 
     lines.append(
         "🔮 Общий итог\n\n"
-        "Этот расклад предлагает дополнительный взгляд "
-        "на выбранную тему. Карты не определяют исход "
-        "ситуации и не могут достоверно описывать мысли "
-        "или намерения другого человека."
+        f"Сочетание карт {names[0]}, {names[1]} "
+        f"и {names[2]} предлагает посмотреть на ситуацию "
+        "с нескольких сторон и сопоставить символический "
+        "смысл расклада с реальными обстоятельствами. "
+        "Карты не определяют неизбежный исход ситуации."
     )
 
     lines.append(
         "💭 Над чем подумать\n\n"
-        "Что в этой ситуации подтверждается реальными "
-        "действиями и фактами, а что пока остаётся "
-        "ожиданием или предположением?"
+        "Какой конкретный шаг сейчас зависит от тебя "
+        "и может сделать ситуацию понятнее?"
     )
 
     return "\n\n".join(lines), chosen
@@ -1923,7 +2035,9 @@ def card_indices(chosen):
 
     for card in chosen:
         try:
-            indices.append(CARDS.index(card))
+            indices.append(
+                CARDS.index(card)
+            )
         except ValueError:
             return None
 
@@ -1935,7 +2049,9 @@ def cards_from_json(cards_json):
         return None
 
     try:
-        indices = json.loads(cards_json)
+        indices = json.loads(
+            cards_json
+        )
 
         if (
             not isinstance(indices, list)
@@ -1953,7 +2069,9 @@ def cards_from_json(cards_json):
             ):
                 return None
 
-            chosen.append(CARDS[index])
+            chosen.append(
+                CARDS[index]
+            )
 
         return chosen
 
@@ -2062,7 +2180,9 @@ def answer(call, text=None):
 # =========================================================
 
 def begin_profile(chat_id, user_id):
-    name, age, _, _, _ = get_profile(user_id)
+    name, age, _, _, _ = get_profile(
+        user_id
+    )
 
     if name and age:
         set_form_step(
@@ -2081,7 +2201,10 @@ def begin_profile(chat_id, user_id):
         )
         return
 
-    set_form_step(user_id, "name")
+    set_form_step(
+        user_id,
+        "name",
+    )
 
     bot.send_message(
         chat_id,
@@ -2092,15 +2215,22 @@ def begin_profile(chat_id, user_id):
     )
 
 
-def continue_after_main_profile(chat_id, user_id):
-    kind, topic, period = get_pending_reading(user_id)
+def continue_after_main_profile(
+    chat_id,
+    user_id,
+):
+    kind, topic, period = get_pending_reading(
+        user_id
+    )
 
     if not valid_reading_params(
         kind,
         topic,
         period,
     ):
-        clear_pending_reading(user_id)
+        clear_pending_reading(
+            user_id
+        )
 
         bot.send_message(
             chat_id,
@@ -2110,14 +2240,19 @@ def continue_after_main_profile(chat_id, user_id):
         )
         return
 
-    if needs_other_person(kind, topic):
+    if needs_other_person(
+        kind,
+        topic,
+    ):
         (
             _,
             _,
             other_name,
             other_age,
             _,
-        ) = get_profile(user_id)
+        ) = get_profile(
+            user_id
+        )
 
         if other_name and other_age:
             set_form_step(
@@ -2155,17 +2290,27 @@ def continue_after_main_profile(chat_id, user_id):
     )
 
 
-def finish_profile_and_process(chat_id, user_id):
-    set_form_step(user_id, None)
+def finish_profile_and_process(
+    chat_id,
+    user_id,
+):
+    set_form_step(
+        user_id,
+        None,
+    )
 
-    kind, topic, period = get_pending_reading(user_id)
+    kind, topic, period = get_pending_reading(
+        user_id
+    )
 
     if not valid_reading_params(
         kind,
         topic,
         period,
     ):
-        clear_pending_reading(user_id)
+        clear_pending_reading(
+            user_id
+        )
 
         bot.send_message(
             chat_id,
@@ -2189,7 +2334,9 @@ def finish_profile_and_process(chat_id, user_id):
 # =========================================================
 
 def activate_promo(user_id, code):
-    normalized_code = code.strip().upper()
+    normalized_code = (
+        code.strip().upper()
+    )
 
     if normalized_code != PROMO_CODE:
         return "invalid", 0
@@ -2221,7 +2368,10 @@ def activate_promo(user_id, code):
         )).fetchone()
 
         if row:
-            return "activated", row[0]
+            return (
+                "activated",
+                row[0],
+            )
 
         current = conn.execute("""
             UPDATE users
@@ -2230,7 +2380,9 @@ def activate_promo(user_id, code):
                 reminder_sent_at = NULL
             WHERE user_id = %s
             RETURNING promo_credits
-        """, (user_id,)).fetchone()
+        """, (
+            user_id,
+        )).fetchone()
 
         return (
             "already",
@@ -2249,7 +2401,9 @@ def claim_promo_credit(user_id):
             WHERE user_id = %s
               AND promo_credits > 0
             RETURNING promo_credits
-        """, (user_id,)).fetchone()
+        """, (
+            user_id,
+        )).fetchone()
 
         if not row:
             return None
@@ -2267,7 +2421,9 @@ def get_reminders_enabled(user_id):
             SELECT reminders_enabled
             FROM users
             WHERE user_id = %s
-        """, (user_id,)).fetchone()
+        """, (
+            user_id,
+        )).fetchone()
 
     if not row:
         return True
@@ -2275,7 +2431,10 @@ def get_reminders_enabled(user_id):
     return bool(row[0])
 
 
-def set_reminders_enabled(user_id, enabled):
+def set_reminders_enabled(
+    user_id,
+    enabled,
+):
     touch_user(user_id)
 
     with db() as conn:
@@ -2294,7 +2453,9 @@ def set_reminders_enabled(user_id, enabled):
 def send_inactivity_reminders():
     cutoff = (
         datetime.now(TZ)
-        - timedelta(days=REMINDER_AFTER_DAYS)
+        - timedelta(
+            days=REMINDER_AFTER_DAYS
+        )
     )
 
     try:
@@ -2308,7 +2469,9 @@ def send_inactivity_reminders():
                   AND reminder_sent_at IS NULL
                 ORDER BY last_seen ASC
                 LIMIT 100
-            """, (cutoff,)).fetchall()
+            """, (
+                cutoff,
+            )).fetchall()
 
         for row in rows:
             user_id = row[0]
@@ -2345,7 +2508,9 @@ def send_inactivity_reminders():
                         UPDATE users
                         SET reminders_enabled = FALSE
                         WHERE user_id = %s
-                    """, (user_id,))
+                    """, (
+                        user_id,
+                    ))
 
             time.sleep(0.2)
 
@@ -2362,7 +2527,9 @@ def reminder_worker():
 
     while True:
         send_inactivity_reminders()
-        time.sleep(REMINDER_CHECK_SECONDS)
+        time.sleep(
+            REMINDER_CHECK_SECONDS
+        )
 
 
 # =========================================================
@@ -2384,7 +2551,10 @@ def make_invoice_payload(
     )
 
 
-def invoice_details(payload, user_id):
+def invoice_details(
+    payload,
+    user_id,
+):
     parts = payload.split(":")
 
     if len(parts) != 5:
@@ -2405,13 +2575,19 @@ def invoice_details(payload, user_id):
     ):
         return None
 
-    if payload_user_id != str(user_id):
+    if payload_user_id != str(
+        user_id
+    ):
         return None
 
     if len(payment_nonce) != 32:
         return None
 
-    return kind, topic, period
+    return (
+        kind,
+        topic,
+        period,
+    )
 
 
 # =========================================================
@@ -2420,7 +2596,9 @@ def invoice_details(payload, user_id):
 
 @bot.message_handler(commands=["start"])
 def start(message):
-    touch_user(message.from_user.id)
+    touch_user(
+        message.from_user.id
+    )
 
     clear_pending_reading(
         message.from_user.id
@@ -2443,11 +2621,14 @@ def start(message):
 
 @bot.message_handler(commands=["myid"])
 def myid(message):
-    touch_user(message.from_user.id)
+    touch_user(
+        message.from_user.id
+    )
 
     bot.send_message(
         message.chat.id,
-        f"Твой Telegram ID: {message.from_user.id}",
+        f"Твой Telegram ID: "
+        f"{message.from_user.id}",
     )
 
 
@@ -2456,10 +2637,13 @@ def myid(message):
 # =========================================================
 
 @bot.message_handler(
-    func=lambda m: m.text == "🔮 Карта дня"
+    func=lambda m:
+    m.text == "🔮 Карта дня"
 )
 def card_of_the_day(message):
-    touch_user(message.from_user.id)
+    touch_user(
+        message.from_user.id
+    )
 
     if not claim_free(
         message.from_user.id,
@@ -2487,10 +2671,13 @@ def card_of_the_day(message):
 
 
 @bot.message_handler(
-    func=lambda m: m.text == "❓ Вопрос дня"
+    func=lambda m:
+    m.text == "❓ Вопрос дня"
 )
 def question_of_the_day(message):
-    touch_user(message.from_user.id)
+    touch_user(
+        message.from_user.id
+    )
 
     if not claim_free(
         message.from_user.id,
@@ -2518,10 +2705,13 @@ def question_of_the_day(message):
 
 
 @bot.message_handler(
-    func=lambda m: m.text == "✨ Сделать расклад"
+    func=lambda m:
+    m.text == "✨ Сделать расклад"
 )
 def reading(message):
-    touch_user(message.from_user.id)
+    touch_user(
+        message.from_user.id
+    )
 
     clear_pending_reading(
         message.from_user.id
@@ -2539,10 +2729,13 @@ def reading(message):
 
 
 @bot.message_handler(
-    func=lambda m: m.text == "ℹ️ О боте"
+    func=lambda m:
+    m.text == "ℹ️ О боте"
 )
 def about(message):
-    touch_user(message.from_user.id)
+    touch_user(
+        message.from_user.id
+    )
 
     bot.send_message(
         message.chat.id,
@@ -2574,14 +2767,19 @@ def about(message):
     )
 )
 def reading_callback(call):
-    touch_user(call.from_user.id)
+    touch_user(
+        call.from_user.id
+    )
 
     kind = call.data.removeprefix(
         "reading_"
     )
 
     if kind not in SPREADS:
-        answer(call, "Расклад не найден")
+        answer(
+            call,
+            "Расклад не найден",
+        )
         return
 
     set_pending_reading(
@@ -2595,7 +2793,9 @@ def reading_callback(call):
         call.message.chat.id,
         f"{SPREADS[kind][0]}\n\n"
         "🎯 Выбери тему:",
-        reply_markup=topics_keyboard(kind),
+        reply_markup=topics_keyboard(
+            kind
+        ),
     )
 
 
@@ -2605,7 +2805,9 @@ def reading_callback(call):
     and c.data.startswith("topic:")
 )
 def topic_callback(call):
-    touch_user(call.from_user.id)
+    touch_user(
+        call.from_user.id
+    )
 
     parts = call.data.split(
         ":",
@@ -2613,7 +2815,10 @@ def topic_callback(call):
     )
 
     if len(parts) != 3:
-        answer(call, "Ошибка выбора")
+        answer(
+            call,
+            "Ошибка выбора",
+        )
         return
 
     _, kind, topic = parts
@@ -2622,11 +2827,16 @@ def topic_callback(call):
         kind not in TOPICS
         or topic not in TOPICS[kind]
     ):
-        answer(call, "Тема не найдена")
+        answer(
+            call,
+            "Тема не найдена",
+        )
         return
 
-    pending_kind, _, _ = get_pending_reading(
-        call.from_user.id
+    pending_kind, _, _ = (
+        get_pending_reading(
+            call.from_user.id
+        )
     )
 
     if pending_kind != kind:
@@ -2680,7 +2890,9 @@ def back_to_topic(call):
     bot.send_message(
         call.message.chat.id,
         "🎯 Выбери другую тему:",
-        reply_markup=topics_keyboard(kind),
+        reply_markup=topics_keyboard(
+            kind
+        ),
     )
 
 
@@ -2693,7 +2905,10 @@ def cancel_reading(call):
         call.from_user.id
     )
 
-    answer(call, "Расклад отменён")
+    answer(
+        call,
+        "Расклад отменён",
+    )
 
     bot.send_message(
         call.message.chat.id,
@@ -2841,7 +3056,9 @@ def process_selected_reading(
                 user_id,
             )
 
-            clear_pending_reading(user_id)
+            clear_pending_reading(
+                user_id
+            )
 
             send_reading_result(
                 chat_id,
@@ -2874,7 +3091,9 @@ def process_selected_reading(
             user_id,
         )
 
-        clear_pending_reading(user_id)
+        clear_pending_reading(
+            user_id
+        )
 
         send_reading_result(
             chat_id,
@@ -2943,7 +3162,9 @@ def offer_payment(
     topic,
     period,
 ):
-    touch_user(user_id)
+    touch_user(
+        user_id
+    )
 
     set_pending_reading(
         user_id,
@@ -2957,7 +3178,9 @@ def offer_payment(
             SELECT terms_accepted
             FROM users
             WHERE user_id = %s
-        """, (user_id,)).fetchone()
+        """, (
+            user_id,
+        )).fetchone()
 
     if row and row[0]:
         send_invoice(
@@ -2969,7 +3192,9 @@ def offer_payment(
         )
         return
 
-    keyboard = types.InlineKeyboardMarkup()
+    keyboard = (
+        types.InlineKeyboardMarkup()
+    )
 
     keyboard.add(
         types.InlineKeyboardButton(
@@ -3036,7 +3261,10 @@ def agree(call):
     )
 
     if len(parts) != 4:
-        answer(call, "Ошибка параметров")
+        answer(
+            call,
+            "Ошибка параметров",
+        )
         return
 
     _, kind, topic, period = parts
@@ -3067,9 +3295,14 @@ def agree(call):
                 terms_accepted = TRUE,
                 last_seen = now(),
                 reminder_sent_at = NULL
-        """, (call.from_user.id,))
+        """, (
+            call.from_user.id,
+        ))
 
-    answer(call, "Условия приняты")
+    answer(
+        call,
+        "Условия приняты",
+    )
 
     send_invoice(
         call.message.chat.id,
@@ -3101,6 +3334,7 @@ def pre_checkout(query):
                 query.id,
                 ok=True,
             )
+
         else:
             bot.answer_pre_checkout_query(
                 query.id,
@@ -3124,7 +3358,9 @@ def pre_checkout(query):
     content_types=["successful_payment"]
 )
 def payment_success(message):
-    touch_user(message.from_user.id)
+    touch_user(
+        message.from_user.id
+    )
 
     payment = message.successful_payment
 
@@ -3147,8 +3383,13 @@ def payment_success(message):
         return
 
     kind, topic, period = details
-    charge_id = payment.telegram_payment_charge_id
 
+    charge_id = (
+        payment.telegram_payment_charge_id
+    )
+
+    # Сначала проверяем, не обрабатывали ли
+    # мы уже этот платёж.
     with db() as conn:
         existing = conn.execute("""
             SELECT
@@ -3161,34 +3402,79 @@ def payment_success(message):
                 cards_json
             FROM payments
             WHERE charge_id = %s
-        """, (charge_id,)).fetchone()
+        """, (
+            charge_id,
+        )).fetchone()
 
     if existing:
+        # Один charge_id не может использоваться
+        # другим пользователем.
         if existing[0] != message.from_user.id:
-            return
-
-        if existing[3]:
-            return
-
-        stored_kind = existing[1] or kind
-        result = existing[2]
-        stored_topic = existing[4] or topic
-        stored_period = existing[5] or period
-        chosen = cards_from_json(existing[6])
-
-        if not chosen:
             print(
-                "Оплаченный расклад найден без сохранённых карт. "
-                "Создаю и сохраняю карты для восстановления.",
+                "Платёж принадлежит другому user_id:",
+                charge_id,
                 flush=True,
             )
+            return
 
+        # Если результат уже полностью отправлен,
+        # повторный Telegram update ничего не делает.
+        if existing[3]:
+            print(
+                "Повторный successful_payment "
+                "для уже доставленного платежа:",
+                charge_id,
+                flush=True,
+            )
+            return
+
+        stored_kind = (
+            existing[1]
+            or kind
+        )
+
+        result = existing[2]
+
+        stored_topic = (
+            existing[4]
+            or topic
+        )
+
+        stored_period = (
+            existing[5]
+            or period
+        )
+
+        chosen = cards_from_json(
+            existing[6]
+        )
+
+        kind = stored_kind
+        topic = stored_topic
+        period = stored_period
+
+        # Старые записи могли появиться до того,
+        # как мы начали сохранять карты.
+        # Для такой записи создаём карты один раз
+        # и сразу сохраняем их.
+        if not chosen:
             chosen = random.sample(
                 CARDS,
                 3,
             )
 
-            indices = card_indices(chosen)
+            indices = card_indices(
+                chosen
+            )
+
+            if indices is None:
+                bot.send_message(
+                    message.chat.id,
+                    "⚠️ Не удалось восстановить "
+                    "оплаченный расклад.\n\n"
+                    "Напиши /paysupport.",
+                )
+                return
 
             with db() as conn:
                 conn.execute("""
@@ -3201,27 +3487,66 @@ def payment_success(message):
                       AND delivered = FALSE
                 """, (
                     json.dumps(indices),
-                    stored_topic,
-                    stored_period,
+                    topic,
+                    period,
                     charge_id,
                 ))
 
-        kind = stored_kind
-        topic = stored_topic
-        period = stored_period
+        # Если старая незавершённая запись
+        # почему-либо не содержит текста,
+        # восстанавливаем его с теми же картами.
+        if not result or not result.strip():
+            result, chosen = spread(
+                kind,
+                topic,
+                period,
+                message.from_user.id,
+                chosen=chosen,
+            )
+
+            with db() as conn:
+                conn.execute("""
+                    UPDATE payments
+                    SET
+                        result = %s,
+                        cards_json = %s,
+                        topic = %s,
+                        period = %s,
+                        amount = COALESCE(amount, %s)
+                    WHERE charge_id = %s
+                      AND delivered = FALSE
+                """, (
+                    result,
+                    json.dumps(
+                        card_indices(chosen)
+                    ),
+                    topic,
+                    period,
+                    payment.total_amount,
+                    charge_id,
+                ))
+
+        print(
+            "Восстанавливаю недоставленный "
+            f"оплаченный расклад: {charge_id}",
+            flush=True,
+        )
 
     else:
         bot.send_message(
             message.chat.id,
             "✅ Оплата успешно получена!\n\n"
-            "🔮 Перемешиваю колоду и готовлю твой расклад…",
+            "🔮 Перемешиваю колоду и готовлю "
+            "твой расклад…",
         )
 
+        # Карты выбираются только один раз.
         chosen = random.sample(
             CARDS,
             3,
         )
 
+        # Получаем текст для тех же самых карт.
         result, chosen = spread(
             kind,
             topic,
@@ -3230,8 +3555,24 @@ def payment_success(message):
             chosen=chosen,
         )
 
-        indices = card_indices(chosen)
+        indices = card_indices(
+            chosen
+        )
 
+        if indices is None:
+            bot.send_message(
+                message.chat.id,
+                "⚠️ Платёж получен, но не удалось "
+                "подготовить расклад.\n\n"
+                "Напиши /paysupport.",
+            )
+            return
+
+        # ВАЖНО:
+        # сохраняем и текст, и конкретные карты
+        # ДО начала отправки пользователю.
+        # Поэтому при проблеме доставки результат
+        # можно восстановить без нового расклада.
         with db() as conn:
             conn.execute("""
                 INSERT INTO payments (
@@ -3246,9 +3587,17 @@ def payment_success(message):
                     cards_json
                 )
                 VALUES (
-                    %s, %s, %s, %s,
-                    FALSE, %s, %s, %s, %s
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    FALSE,
+                    %s,
+                    %s,
+                    %s,
+                    %s
                 )
+
                 ON CONFLICT (charge_id)
                 DO NOTHING
             """, (
@@ -3262,6 +3611,69 @@ def payment_success(message):
                 json.dumps(indices),
             ))
 
+        # На случай крайне редкой гонки:
+        # перечитываем сохранённую запись.
+        with db() as conn:
+            stored = conn.execute("""
+                SELECT
+                    user_id,
+                    kind,
+                    result,
+                    delivered,
+                    topic,
+                    period,
+                    cards_json
+                FROM payments
+                WHERE charge_id = %s
+            """, (
+                charge_id,
+            )).fetchone()
+
+        if not stored:
+            bot.send_message(
+                message.chat.id,
+                "⚠️ Платёж получен, но результат "
+                "не удалось сохранить.\n\n"
+                "Напиши /paysupport.",
+            )
+            return
+
+        if stored[0] != message.from_user.id:
+            return
+
+        if stored[3]:
+            return
+
+        kind = (
+            stored[1]
+            or kind
+        )
+
+        result = (
+            stored[2]
+            or result
+        )
+
+        topic = (
+            stored[4]
+            or topic
+        )
+
+        period = (
+            stored[5]
+            or period
+        )
+
+        restored_cards = cards_from_json(
+            stored[6]
+        )
+
+        if restored_cards:
+            chosen = restored_cards
+
+    # Отправляем сохранённый расклад.
+    # delivered станет TRUE только после того,
+    # как успешно отправятся и карты, и текст.
     try:
         delivered = send_reading_result(
             message.chat.id,
@@ -3290,7 +3702,8 @@ def payment_success(message):
             bot.send_message(
                 message.chat.id,
                 "⚠️ Не удалось полностью отправить расклад.\n\n"
-                "Платёж сохранён. Если результат не пришёл полностью, "
+                "Платёж и сам расклад сохранены. "
+                "Если результат не пришёл полностью, "
                 "напиши /paysupport.",
             )
         except Exception:
@@ -3298,15 +3711,25 @@ def payment_success(message):
 
         return
 
+    # Только после полной доставки отмечаем
+    # платёж как доставленный.
     with db() as conn:
         conn.execute("""
             UPDATE payments
             SET delivered = TRUE
             WHERE charge_id = %s
-        """, (charge_id,))
+        """, (
+            charge_id,
+        ))
 
     clear_pending_reading(
         message.from_user.id
+    )
+
+    print(
+        "Оплаченный расклад полностью доставлен:",
+        charge_id,
+        flush=True,
     )
 
 
@@ -3316,7 +3739,9 @@ def payment_success(message):
 
 @bot.message_handler(commands=["terms"])
 def terms(message):
-    touch_user(message.from_user.id)
+    touch_user(
+        message.from_user.id
+    )
 
     bot.send_message(
         message.chat.id,
@@ -3334,7 +3759,9 @@ def terms(message):
 
 @bot.message_handler(commands=["promo"])
 def promo(message):
-    parts = message.text.split(maxsplit=1)
+    parts = message.text.split(
+        maxsplit=1
+    )
 
     if len(parts) < 2:
         bot.send_message(
@@ -3381,7 +3808,9 @@ def promo(message):
     ]
 )
 def support(message):
-    touch_user(message.from_user.id)
+    touch_user(
+        message.from_user.id
+    )
 
     clear_pending_reading(
         message.from_user.id
@@ -3392,7 +3821,9 @@ def support(message):
             UPDATE users
             SET support_pending = TRUE
             WHERE user_id = %s
-        """, (message.from_user.id,))
+        """, (
+            message.from_user.id,
+        ))
 
     bot.send_message(
         message.chat.id,
@@ -3410,13 +3841,18 @@ def support(message):
 def testreading(message):
     if (
         not OWNER_ID
-        or message.from_user.id != OWNER_ID
+        or message.from_user.id
+        != OWNER_ID
     ):
         return
 
-    touch_user(message.from_user.id)
+    touch_user(
+        message.from_user.id
+    )
 
-    parts = message.text.split(maxsplit=1)
+    parts = message.text.split(
+        maxsplit=1
+    )
 
     if (
         len(parts) < 2
@@ -3432,7 +3868,11 @@ def testreading(message):
         )
         return
 
-    kind = parts[1].strip().lower()
+    kind = (
+        parts[1]
+        .strip()
+        .lower()
+    )
 
     test_topic = next(
         iter(TOPICS[kind])
@@ -3461,7 +3901,8 @@ def testreading(message):
     )
 
     print(
-        f"Тестовый расклад отправлен: {delivered}",
+        "Тестовый расклад отправлен: "
+        f"{delivered}",
         flush=True,
     )
 
@@ -3475,7 +3916,9 @@ def testreading(message):
     m.text == "🔔 Напоминания"
 )
 def reminders_settings(message):
-    touch_user(message.from_user.id)
+    touch_user(
+        message.from_user.id
+    )
 
     enabled = get_reminders_enabled(
         message.from_user.id
@@ -3491,7 +3934,9 @@ def reminders_settings(message):
         message.chat.id,
         text,
         reply_markup=(
-            reminder_settings_keyboard(enabled)
+            reminder_settings_keyboard(
+                enabled
+            )
         ),
     )
 
@@ -3545,7 +3990,9 @@ def reminders_on(call):
     c.data == "reminder_get_card"
 )
 def reminder_get_card(call):
-    touch_user(call.from_user.id)
+    touch_user(
+        call.from_user.id
+    )
 
     answer(call)
 
@@ -3585,11 +4032,21 @@ def reminder_get_card(call):
     func=lambda m: True,
 )
 def other_text(message):
-    touch_user(message.from_user.id)
+    touch_user(
+        message.from_user.id
+    )
 
-    user_id = message.from_user.id
-    chat_id = message.chat.id
-    text = (message.text or "").strip()
+    user_id = (
+        message.from_user.id
+    )
+
+    chat_id = (
+        message.chat.id
+    )
+
+    text = (
+        message.text or ""
+    ).strip()
 
     with db() as conn:
         row = conn.execute("""
@@ -3598,7 +4055,9 @@ def other_text(message):
                 form_step
             FROM users
             WHERE user_id = %s
-        """, (user_id,)).fetchone()
+        """, (
+            user_id,
+        )).fetchone()
 
     support_pending = bool(
         row and row[0]
@@ -3628,7 +4087,9 @@ def other_text(message):
                 UPDATE users
                 SET support_pending = FALSE
                 WHERE user_id = %s
-            """, (user_id,))
+            """, (
+                user_id,
+            ))
 
         bot.send_message(
             chat_id,
@@ -3744,7 +4205,9 @@ def other_text(message):
             )
             return
 
-        other_name = text.strip()
+        other_name = (
+            text.strip()
+        )
 
         save_other_name(
             user_id,
@@ -3773,9 +4236,14 @@ def other_text(message):
             )
             return
 
-        other_age = int(text)
+        other_age = int(
+            text
+        )
 
-        if other_age < 18 or other_age > 100:
+        if (
+            other_age < 18
+            or other_age > 100
+        ):
             bot.send_message(
                 chat_id,
                 "🎂 Укажи возраст от 18 до 100 лет.",
