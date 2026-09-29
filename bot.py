@@ -1097,7 +1097,7 @@ def send_card_animation(
             )
 
         # Показываем переворот один короткий цикл.
-        time.sleep(8)
+        time.sleep(6)
 
         # Убираем зацикленную GIF.
         try:
