@@ -1296,7 +1296,18 @@ def send_long_message(
 # =========================================================
 # ВСПОМОГАТЕЛЬНЫЕ
 # =========================================================
-
+def answer(call, text=None):
+    try:
+        bot.answer_callback_query(
+            call.id,
+            text=text,
+        )
+    except Exception as exc:
+        print(
+            "Ошибка answer_callback_query:",
+            repr(exc),
+            flush=True,
+        )
 def topic_name(kind, topic):
     return TOPICS.get(kind, {}).get(
         topic,
