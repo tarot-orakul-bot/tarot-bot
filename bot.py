@@ -1037,48 +1037,6 @@ def card_gif_path(card):
     )
 
 
-def send_card_animation(
-    chat_id,
-    card,
-    caption=None,
-):
-    gif_path = card_gif_path(card)
-
-    try:
-        if not os.path.isfile(gif_path):
-            print(
-                f"GIF карты не найдена: {gif_path}",
-                flush=True,
-            )
-            return send_card_image(
-                chat_id,
-                card,
-                caption=caption,
-            )
-
-        with open(gif_path, "rb") as animation:
-            bot.send_animation(
-                chat_id=chat_id,
-                animation=animation,
-                caption=caption,
-            )
-
-        return True
-
-    except Exception as exc:
-        print(
-            "Ошибка отправки GIF карты "
-            f"{card[0]}: {repr(exc)}",
-            flush=True,
-        )
-
-        return send_card_image(
-            chat_id,
-            card,
-            caption=caption,
-        )
-
-
 def send_card_image(
     chat_id,
     card,
@@ -1112,6 +1070,68 @@ def send_card_image(
         return False
 
 
+def send_card_animation(
+    chat_id,
+    card,
+    caption=None,
+):
+    gif_path = card_gif_path(card)
+
+    try:
+        if not os.path.isfile(gif_path):
+            print(
+                f"GIF карты не найдена: {gif_path}",
+                flush=True,
+            )
+            return send_card_image(
+                chat_id,
+                card,
+                caption=caption,
+            )
+
+        with open(gif_path, "rb") as animation:
+            sent = bot.send_animation(
+                chat_id=chat_id,
+                animation=animation,
+                caption=caption,
+            )
+
+        # Показываем переворот один короткий цикл.
+        time.sleep(3)
+
+        # Убираем зацикленную GIF.
+        try:
+            bot.delete_message(
+                chat_id,
+                sent.message_id,
+            )
+        except Exception as exc:
+            print(
+                f"Не удалось удалить GIF: {repr(exc)}",
+                flush=True,
+            )
+
+        # После переворота оставляем открытую карту.
+        return send_card_image(
+            chat_id,
+            card,
+            caption=caption,
+        )
+
+    except Exception as exc:
+        print(
+            "Ошибка отправки GIF карты "
+            f"{card[0]}: {repr(exc)}",
+            flush=True,
+        )
+
+        return send_card_image(
+            chat_id,
+            card,
+            caption=caption,
+        )
+
+
 def send_spread_images(
     chat_id,
     chosen,
@@ -1130,9 +1150,7 @@ def send_spread_images(
         time.sleep(0.4)
 
     return True
-
-
-# =========================================================
+    # =========================================================
 # ВСПОМОГАТЕЛЬНЫЕ
 # =========================================================
 
@@ -1159,6 +1177,8 @@ def valid_reading_params(kind, topic, period):
         and topic in TOPICS.get(kind, {})
         and period in PERIODS
     )
+
+
 def reading_positions(kind, topic):
     positions = {
         "love": {
